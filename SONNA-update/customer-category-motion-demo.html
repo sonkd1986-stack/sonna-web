@@ -40,21 +40,21 @@
     main { max-width: 1120px; margin: auto; padding: 0 20px 36px; }
 
     .category {
-      --accent: #2467c4;
-      --tint: #d8e8ff;
-      --wash: #c9ddfb;
-      --card: #e5efff;
+      --accent: #3478d4;
+      --tint: #f1f6ff;
+      --wash: #eaf1fc;
+      --card: #f7f9fe;
       margin: 25px 0 30px;
       padding: 12px;
-      border: 2px solid color-mix(in srgb, var(--accent) 32%, white);
+      border: 1px solid color-mix(in srgb, var(--accent) 16%, white);
       border-radius: 21px;
       background: var(--wash);
-      box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 13%, transparent);
+      box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 8%, transparent);
       animation: category-enter 560ms both;
     }
 
-    .category.android { --accent: #147352; --tint: #c9efda; --wash: #b8e6cb; --card: #dcf4e5; animation-delay: 100ms; }
-    .category.meta { --accent: #70409d; --tint: #e4cff5; --wash: #d9bff0; --card: #f0e2fb; animation-delay: 200ms; }
+    .category.android { --accent: #198467; --tint: #f0faf4; --wash: #e9f5ee; --card: #f7fcf8; animation-delay: 100ms; }
+    .category.meta { --accent: #8a54bb; --tint: #f8f2fc; --wash: #f2ebf8; --card: #fcf9fe; animation-delay: 200ms; }
 
     .category-head {
       display: flex;
@@ -62,7 +62,7 @@
       gap: 14px;
       min-height: 108px;
       padding: 14px 18px;
-      border: 1px solid color-mix(in srgb, var(--accent) 34%, white);
+      border: 1px solid color-mix(in srgb, var(--accent) 18%, white);
       border-left: 5px solid var(--accent);
       border-radius: 16px;
       background: var(--tint);
@@ -130,7 +130,7 @@
 
     .product {
       overflow: hidden;
-      border: 1px solid color-mix(in srgb, var(--accent) 24%, white);
+      border: 1px solid color-mix(in srgb, var(--accent) 14%, white);
       border-radius: 15px;
       background: var(--card);
       box-shadow: 0 5px 15px #2617430a;
@@ -146,7 +146,7 @@
       display: grid;
       place-items: center;
       height: 92px;
-      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, white), var(--tint));
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, white), var(--tint));
       color: var(--accent);
       font-size: 27px;
     }
