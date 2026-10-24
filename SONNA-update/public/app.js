@@ -169,6 +169,8 @@
     '#root [style*="font-size:40px"],#root [style*="font-size: 40px"]{font-size:28px!important}' +
     '#root [style*="font-size:44px"],#root [style*="font-size: 44px"]{font-size:30px!important}' +
     '#root [style*="font-size:48px"],#root [style*="font-size: 48px"]{font-size:32px!important}' +
+    '#root .account-category-tab:hover{transform:translateY(-1px);filter:brightness(1.12)}' +
+    '#root .account-category-tab:focus-visible{outline:2px solid #FFC24B;outline-offset:2px}' +
     '#root>div>aside{display:none!important}' +
     '#root>div>main{flex:1 1 100%!important;padding:20px 24px!important;gap:16px!important}' +
     '#root>div>main section{padding:16px!important}' +
