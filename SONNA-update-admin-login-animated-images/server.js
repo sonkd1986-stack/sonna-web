@@ -178,11 +178,43 @@ function publicPayment() {
 }
 function publicImages(images) {
   return Array.isArray(images)
-    ? images.filter(image => typeof image === 'string' && /^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp)$/.test(image)).slice(0, 5)
+    ? images.filter(image => typeof image === 'string' && /^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image)).slice(0, 5)
     : [];
 }
 function priceAmount(value) {
   return Number(String(value || '').replace(/\D/g, '')) || 0;
+}
+function activeGiftRules() {
+  const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  return (Array.isArray(accountsDb.rulesData) ? accountsDb.rulesData : [])
+    .filter(rule => rule && !rule.paused
+      && Number.isSafeInteger(Number(rule.buy)) && Number(rule.buy) > 0
+      && Number.isSafeInteger(Number(rule.give)) && Number(rule.give) > 0
+      && (!rule.from || rule.from <= today)
+      && (!rule.until || rule.until >= today));
+}
+function giftRulesForSub(sub) {
+  return activeGiftRules()
+    .filter(rule => (rule.buySubId && rule.buySubId === sub.id) || (!rule.buySubId && rule.buySub === sub.title))
+    .sort((a, b) => Number(b.buy) - Number(a.buy) || Number(b.give) - Number(a.give));
+}
+function giftSubIdForRule(rule) {
+  if (typeof rule.giveSubId === 'string' && rule.giveSubId) return rule.giveSubId;
+  const giftSubs = store.catalog && Array.isArray(store.catalog.giftSubs) ? store.catalog.giftSubs : [];
+  const catalogSub = giftSubs.find(sub => sub && sub.title === rule.giveSub && sub.id);
+  if (catalogSub) return catalogSub.id;
+  const editedSub = Object.keys(accountsDb.edits || {}).find(key =>
+    key.endsWith(':t') && accountsDb.edits[key] === rule.giveSub);
+  if (editedSub) return editedSub.slice(0, -2);
+  const accountSubs = Array.from(new Set(accountRecords()
+    .filter(account => account && account.cat === 'promo' && account.sub)
+    .map(account => account.sub)));
+  const matchingSub = accountSubs.filter(id => (accountsDb.edits || {})[id + ':t'] === rule.giveSub);
+  return matchingSub.length === 1 ? matchingSub[0] : '';
+}
+function giftOfferForSub(sub) {
+  const rule = giftRulesForSub(sub)[0];
+  return rule ? { buy: Number(rule.buy), give: Number(rule.give) } : null;
 }
 function publicSales(limit) {
   const byId = new Map(accountRecords().filter(a => a && a.id).map(a => [a.id, a]));
@@ -200,9 +232,9 @@ function publicSales(limit) {
     if (!order || !Array.isArray(order.inventoryIds) || ['Đã hoàn tiền', 'Đã hủy', 'Đã huỷ'].includes(order.status)) return;
     order.inventoryIds.forEach(id => {
       if (seen.has(id)) return;
-      seen.add(id);
       const account = byId.get(id);
       if (!account || account.del || account.status !== 'Đã bán') return;
+      seen.add(id);
       const orderTitle = String(order.title || '').replace(/\s*[×x]\s*\d+\s*$/, '').trim();
       recent.push({
         title: String(account.title || '').trim() || orderTitle || 'Acc đã bán',
@@ -227,12 +259,14 @@ function publicStore() {
   data.recentSales = data.salesDisplay.enabled ? sales.recent : [];
   if (data.catalog && Array.isArray(data.catalog.subs)) {
     data.catalog = { ...data.catalog };
+    delete data.catalog.giftSubs;
     const available = eligibleAccounts();
     data.catalog.subs = data.catalog.subs.map(sb => {
+      const giftOffer = giftOfferForSub(sb);
       const configuredImages = publicImages((accountsDb.subPics || {})[sb.id]);
       const accountImages = available.filter(a => a.sub === sb.id)
         .flatMap(a => publicImages((accountsDb.accPics || {})[a.id]));
-      return { ...sb, pics: configuredImages.length ? configuredImages : accountImages.slice(0, 5) };
+      return { ...sb, gift: !!giftOffer, giftOffer, pics: configuredImages.length ? configuredImages : accountImages.slice(0, 5) };
     });
     data.catalog.accts = available.map(a => {
       const price = priceAmount(a.price);
@@ -370,7 +404,7 @@ function renameAccountId(oldId, newId) {
   return { status: 200, store: nextStore };
 }
 function eligibleAccounts() {
-  return accountRecords().filter(a => a && !a.del && a.status === 'Đang bán' && String(a.tk || '').trim() && String(a.mk || '').trim());
+  return accountRecords().filter(a => a && a.cat !== 'promo' && !a.del && a.status === 'Đang bán' && String(a.tk || '').trim() && String(a.mk || '').trim());
 }
 function publicUser(u) { return u ? { id: u.id, username: u.username, wallet: u.wallet, usedCodes: u.usedCodes } : null; }
 function userOrders(u) { return orders.filter(o => o.userId === u.id).reverse().map(({ userId, ...o }) => o); }
@@ -456,14 +490,31 @@ function createOrder(user, body) {
   const candidates = eligibleAccounts().filter(a => item.isPack ? a.sub === item.id : a.id === item.id);
   if (candidates.length < qty) return { status: 409, error: 'Kho vừa thay đổi. Vui lòng tải lại trang và thử lại.' };
 
+  const productSub = (store.catalog && store.catalog.subs || []).find(sub => sub.id === item.id);
+  const giftRule = productSub && giftRulesForSub(productSub).find(rule => qty >= Number(rule.buy));
+  let gifted = [];
+  if (giftRule) {
+    const giftSubId = giftSubIdForRule(giftRule);
+    if (!giftSubId) return { status: 409, error: 'Chưa xác định được thư mục acc quà tặng. Vui lòng báo admin kiểm tra quy tắc khuyến mãi.' };
+    const giftQty = Math.floor(qty / Number(giftRule.buy)) * Number(giftRule.give);
+    const giftCandidates = accountRecords().filter(a => a && a.cat === 'promo' && a.sub === giftSubId && !a.del
+      && a.status === 'Trong kho' && String(a.tk || '').trim() && String(a.mk || '').trim());
+    if (giftCandidates.length < giftQty) {
+      return { status: 409, error: 'Kho quà tặng hiện không đủ để áp dụng khuyến mãi. Giao dịch chưa bị trừ tiền.' };
+    }
+    gifted = giftCandidates.slice(0, giftQty);
+  }
+
   const seq = orders.length;
   const orderId = 'DH-' + (20853 + seq);
   const assigned = candidates.slice(0, qty);
+  const allAssigned = assigned.concat(gifted);
   const order = {
     code: orderId, userId: user.id, title: item.title + (item.isPack ? ' × ' + qty : ''),
     itemId: item.id, qty, coupon: cp ? cp.code : '', discount, total, time: fmtTime(new Date()),
-    createdAt: new Date().toISOString(), status: 'Đã thanh toán', inventoryIds: assigned.map(a => a.id),
+    createdAt: new Date().toISOString(), status: 'Đã thanh toán', inventoryIds: allAssigned.map(a => a.id),
     accs: assigned.map(a => ({ line: a.tk + '|' + a.mk, tag: 'Acc mua', col: '#14744E' }))
+      .concat(gifted.map(a => ({ line: a.tk + '|' + a.mk, tag: 'Quà tặng', col: '#8A4B00' })))
   };
   const nextUsers = JSON.parse(JSON.stringify(usersDb));
   const nextUser = nextUsers.users.find(x => x.id === user.id);
@@ -479,6 +530,10 @@ function createOrder(user, body) {
   assigned.forEach(a => {
     nextAccounts.ov = nextAccounts.ov || {};
     nextAccounts.ov[a.id] = { ...(nextAccounts.ov[a.id] || {}), status: 'Đã bán', orderId, soldAt: new Date().toISOString(), soldTo: user.id };
+  });
+  gifted.forEach(a => {
+    nextAccounts.ov = nextAccounts.ov || {};
+    nextAccounts.ov[a.id] = { ...(nextAccounts.ov[a.id] || {}), status: 'Đã tặng', orderId, giftedAt: new Date().toISOString(), giftedTo: user.id };
   });
   nextStore.sold = Object.assign({}, nextStore.sold, { [item.id]: ((nextStore.sold || {})[item.id] || 0) + qty });
   commitState({ [USERS_FILE]: nextUsers, [ORDERS_FILE]: nextOrders, [ACCOUNTS_FILE]: nextAccounts, [STORE_FILE]: nextStore });

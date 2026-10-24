@@ -24,7 +24,7 @@ function build(nodes,scope,out){
    if(name.indexOf('hint-')===0){el.removeAttribute(name);return;}
    if(val.indexOf('{{')<0) return;
    if(name.indexOf('on')===0){el.removeAttribute(name);var fn=lookup(inner(val),scope);
-    if(typeof fn==='function'){var ev=name==='onclick'?'click':((el.tagName==='SELECT'||el.type==='file')?'change':'input');if(ev==='input'){el.addEventListener('input',function(e){if(e.isComposing)return;fn(e);});el.addEventListener('compositionend',function(e){fn(e);});}else{el.addEventListener(ev,function(e){fn(e);});}}
+   if(typeof fn==='function'){var ev=name==='onclick'?'click':((el.tagName==='SELECT'||el.type==='file'||el.type==='date')?'change':'input');if(ev==='input'){el.addEventListener('input',function(e){if(e.isComposing)return;fn(e);});el.addEventListener('compositionend',function(e){fn(e);});}else{el.addEventListener(ev,function(e){fn(e);});}}
     return;}
    var raw=WHOLE.test(val)?lookup(inner(val),scope):interp(val,scope);
    if(BOOL[name]){if(raw&&raw!=='false')el.setAttribute(name,'');else el.removeAttribute(name);return;}
