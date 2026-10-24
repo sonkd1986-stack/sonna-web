@@ -727,14 +727,36 @@ async function handle(req, res) {
         const list = usersDb.users.map(u => {
           const userOrdersList = orders.filter(o => o.userId === u.id);
           const depositsList = deposits.filter(d => d.userId === u.id && d.status === 'credited');
+          const walletHistory = Array.isArray(u.walletHistory) ? u.walletHistory : [];
           const recent = userOrdersList.map(o => ({ text: 'Mua hàng: ' + o.code, time: o.time, amount: '-' + money(Number(o.total) || 0), col: '#FF6B7A', createdAt: o.createdAt || '' }))
             .concat(depositsList.map(d => ({ text: 'Nạp ví qua chuyển khoản', time: d.time, amount: '+' + money((Number(d.amount) || 0) + (Number(d.bonus) || 0)), col: '#43D9A0', createdAt: d.time || '' })))
+            .concat(walletHistory.map(entry => ({ text: 'Điều chỉnh ví: ' + entry.reason, time: fmtTime(new Date(entry.createdAt || 0)), amount: (Number(entry.amount) < 0 ? '-' : '+') + money(Math.abs(Number(entry.amount) || 0)), col: Number(entry.amount) < 0 ? '#FF6B7A' : '#43D9A0', createdAt: entry.createdAt || '' })))
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 10)
             .map(({ createdAt, ...entry }) => entry);
+          const transactions = userOrdersList.map(o => ({
+            id: o.code, type: 'order', time: o.time || fmtTime(new Date(o.createdAt || 0)), sortAt: o.createdAt || '',
+            title: 'Mua hàng · ' + o.title, amount: -Math.abs(Number(o.total) || 0),
+            status: o.status || 'Đã thanh toán',
+            accounts: Array.isArray(o.accs) ? o.accs.map(a => ({ tag: a.tag || 'Acc', line: String(a.line || '') })).filter(a => a.line) : []
+          }))
+            .concat(depositsList.map(d => ({
+              id: String(d.id || d.reference || d.time || 'deposit'),
+              type: 'deposit', time: d.time || '', sortAt: d.time || '', title: 'Nạp ví qua chuyển khoản',
+              amount: (Number(d.amount) || 0) + (Number(d.bonus) || 0),
+              status: 'Đã cộng ví', accounts: []
+            })))
+            .concat(walletHistory.map((entry, index) => ({
+              id: String(entry.id || 'wallet-' + index), type: 'wallet',
+              time: fmtTime(new Date(entry.createdAt || 0)), sortAt: entry.createdAt || '',
+              title: 'Điều chỉnh ví · ' + String(entry.reason || 'Không có lý do'),
+              amount: Number(entry.amount) || 0, status: 'Đã cập nhật', accounts: []
+            })))
+            .sort((a, b) => String(b.sortAt).localeCompare(String(a.sortAt)))
+            .map(({ sortAt, ...transaction }) => transaction);
           return { id: u.id, username: u.username, wallet: u.wallet, createdAt: u.createdAt,
             orderCount: userOrdersList.length, spent: userOrdersList.filter(o => o.status !== 'Đã hoàn tiền').reduce((sum, o) => sum + (Number(o.total) || 0), 0),
             toppedUp: depositsList.reduce((sum, d) => sum + (Number(d.amount) + (Number(d.bonus) || 0)), 0),
-            locked: !!u.locked, usedCodes: u.usedCodes || [], recent };
+            locked: !!u.locked, usedCodes: u.usedCodes || [], recent, transactions };
         });
         return send(res, 200, { users: list });
       }
@@ -787,6 +809,24 @@ async function handle(req, res) {
         }
         return send(res, 200, { ok: true, locked: nextUser.locked });
       }
+      if ((m = /^\/api\/admin\/users\/(\d+)\/password$/.exec(p)) && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
+        const user = usersDb.users.find(u => u.id === Number(m[1]));
+        if (!user) return send(res, 404, { error: 'Không tìm thấy khách hàng.' });
+        const password = String((await readBody(req)).password || '');
+        if (password.length < 6 || password.length > 100) return send(res, 400, { error: 'Mật khẩu mới cần từ 6 đến 100 ký tự.' });
+        const nextUsers = JSON.parse(JSON.stringify(usersDb));
+        const nextUser = nextUsers.users.find(u => u.id === user.id);
+        const salt = crypto.randomBytes(16).toString('hex');
+        nextUser.salt = salt;
+        nextUser.hash = hashPw(password, salt);
+        nextUser.passwordChangedAt = new Date().toISOString();
+        commitState({ [USERS_FILE]: nextUsers });
+        usersDb = nextUsers;
+        cSessions.forEach((entry, token) => { if (entry.id === nextUser.id) cSessions.delete(token); });
+        saveSessions();
+        return send(res, 200, { ok: true });
+      }
       if ((m = /^\/api\/admin\/orders\/([A-Za-z0-9-]+)$/.exec(p)) && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         const order = orders.find(o => o.code === m[1]);
@@ -819,11 +859,16 @@ async function handle(req, res) {
       if ((m = /^\/api\/admin\/users\/(\d+)\/wallet$/.exec(p)) && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         const u = usersDb.users.find(x => x.id === Number(m[1]));
-        const d = Math.trunc(Number((await readBody(req)).delta));
-        if (!u || !Number.isFinite(d) || u.wallet + d < 0) return send(res, 400, { error: 'Yêu cầu không hợp lệ.' });
+        const body = await readBody(req);
+        const d = Math.trunc(Number(body.delta));
+        const reason = String(body.reason || '').trim();
+        if (!u || !Number.isFinite(d) || !d || u.wallet + d < 0 || !reason || reason.length > 200) return send(res, 400, { error: 'Yêu cầu không hợp lệ hoặc thiếu lý do.' });
         const nextUsers = JSON.parse(JSON.stringify(usersDb));
         const nextUser = nextUsers.users.find(x => x.id === u.id);
         nextUser.wallet += d;
+        nextUser.walletHistory = (Array.isArray(nextUser.walletHistory) ? nextUser.walletHistory : []).concat({
+          id: crypto.randomBytes(8).toString('hex'), amount: d, reason, createdAt: new Date().toISOString()
+        });
         commitState({ [USERS_FILE]: nextUsers });
         usersDb = nextUsers;
         return send(res, 200, { ok: true, wallet: nextUser.wallet });
