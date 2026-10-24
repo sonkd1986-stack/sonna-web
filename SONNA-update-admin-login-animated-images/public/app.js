@@ -16,6 +16,7 @@
         if (Array.isArray(j.recentSales)) MEM.recentSales = j.recentSales;
         if (typeof j.soldAccountCount === 'number') MEM.soldAccountCount = j.soldAccountCount;
         if (j.salesDisplay && typeof j.salesDisplay === 'object') MEM.salesDisplay = j.salesDisplay;
+        if (j.catalog && typeof j.catalog === 'object') MEM.catalog = j.catalog;
         if (j.store && typeof j.store === 'object') MEM = Object.assign({}, MEM, j.store);
         return j;
       }); });

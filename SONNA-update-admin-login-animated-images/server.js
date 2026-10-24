@@ -541,7 +541,8 @@ function createOrder(user, body) {
   const { userId, ...pub } = order;
   const sales = publicStore();
   return { status: 200, order: pub, user: publicUser(nextUser), sold: store.sold,
-    recentSales: sales.recentSales, soldAccountCount: sales.soldAccountCount, salesDisplay: sales.salesDisplay };
+    recentSales: sales.recentSales, soldAccountCount: sales.soldAccountCount, salesDisplay: sales.salesDisplay,
+    catalog: sales.catalog };
 }
 function topupBonus(amount) {
   const TP = Object.assign({ enabled: false, pct: '5', min: '0', cap: '' }, store.topup || {});
