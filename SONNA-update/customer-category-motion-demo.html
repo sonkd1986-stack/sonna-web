@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SONNA | Demo chuyển động danh mục</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Barlow, Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #1b1530;
+      background: #f4f5fa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body { margin: 0; }
+
+    .topbar {
+      padding: 16px 24px;
+      color: #fff;
+      background: #24143d;
+      box-shadow: 0 5px 18px #24143d2b;
+    }
+
+    .topbar strong { letter-spacing: .14em; font-size: 21px; }
+
+    .intro {
+      max-width: 1120px;
+      margin: 22px auto;
+      padding: 13px 16px;
+      border: 1px solid #ded4f5;
+      border-radius: 14px;
+      background: #f1edfb;
+      color: #493668;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    main { max-width: 1120px; margin: auto; padding: 0 20px 36px; }
+
+    .category {
+      --accent: #2467c4;
+      --tint: #d8e8ff;
+      --wash: #c9ddfb;
+      --card: #e5efff;
+      margin: 25px 0 30px;
+      padding: 12px;
+      border: 2px solid color-mix(in srgb, var(--accent) 32%, white);
+      border-radius: 21px;
+      background: var(--wash);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 13%, transparent);
+      animation: category-enter 560ms both;
+    }
+
+    .category.android { --accent: #147352; --tint: #c9efda; --wash: #b8e6cb; --card: #dcf4e5; animation-delay: 100ms; }
+    .category.meta { --accent: #70409d; --tint: #e4cff5; --wash: #d9bff0; --card: #f0e2fb; animation-delay: 200ms; }
+
+    .category-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 108px;
+      padding: 14px 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 34%, white);
+      border-left: 5px solid var(--accent);
+      border-radius: 16px;
+      background: var(--tint);
+      box-shadow: 0 7px 22px #2515410d;
+      transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    }
+
+    .category-head:hover {
+      transform: translateY(-3px);
+      border-color: color-mix(in srgb, var(--accent) 40%, #d7dce8);
+      box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 17%, transparent);
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      flex: 0 0 58px;
+      width: 58px;
+      height: 58px;
+      overflow: hidden;
+      border: 1px solid #ffffffb8;
+      border-radius: 17px;
+      background: #171c2b;
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 23%, transparent);
+      transition: transform 240ms ease;
+    }
+
+    .category-head:hover .brand-mark { transform: rotate(-5deg) scale(1.06); }
+    .brand-mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+    .title { flex: 1; min-width: 120px; }
+
+    h2 {
+      margin: 0;
+      color: #211737;
+      font-size: clamp(19px, 3vw, 25px);
+      line-height: 1.2;
+      text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 27%, transparent);
+    }
+
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border: 1px solid #dce0e9;
+      border-radius: 999px;
+      background: #ffffffd9;
+      color: #464154;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill strong { color: var(--accent); }
+    .platform { color: var(--accent); font-weight: 700; }
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 13px;
+      margin-top: 13px;
+    }
+
+    .product {
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, white);
+      border-radius: 15px;
+      background: var(--card);
+      box-shadow: 0 5px 15px #2617430a;
+      transition: transform 220ms ease, box-shadow 220ms ease;
+    }
+
+    .product:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+
+    .product-art {
+      display: grid;
+      place-items: center;
+      height: 92px;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, white), var(--tint));
+      color: var(--accent);
+      font-size: 27px;
+    }
+
+    .product-info { padding: 13px 15px 15px; background: var(--card); }
+    .product-name { font-weight: 750; }
+    .price { margin-top: 5px; color: #b73c4b; font-weight: 800; }
+    .stock { margin-top: 3px; color: #747183; font-size: 12px; }
+
+    @keyframes category-enter {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 14px 17px; }
+      .intro { margin: 16px 14px; }
+      main { padding: 0 14px 28px; }
+      .category-head { flex-wrap: wrap; gap: 10px; padding: 13px; }
+      .brand-mark { flex-basis: 50px; width: 50px; height: 50px; }
+      .stats { width: 100%; padding-left: 60px; }
+      .products { gap: 9px; }
+      .product-art { height: 75px; }
+      .product-info { padding: 11px; font-size: 13px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar"><strong>SONNA</strong></header>
+  <aside class="intro">
+    <strong>Demo hiệu ứng:</strong> bỏ dòng “Danh mục acc”; mỗi nhóm xuất hiện nhẹ khi tải trang,
+    còn tiêu đề, icon và thẻ sản phẩm chỉ chuyển động khi rê chuột/chạm. Hiệu ứng được tiết chế,
+    không chạy lặp liên tục; danh sách sản phẩm vẫn hiển thị bình thường, không cuộn riêng.
+    Số liệu bên dưới chỉ để minh họa.
+  </aside>
+  <main>
+    <section class="category">
+      <div class="category-head">
+        <span class="brand-mark">
+          <img src="./public/sonna-mark.svg" alt="Logo SONNA">
+        </span>
+        <div class="title"><h2>Reroll DBL iOS</h2></div>
+        <div class="stats">
+          <span class="pill platform">iOS</span>
+          <span class="pill">Đã bán <strong>126</strong></span>
+          <span class="pill">Còn kho <strong>12</strong></span>
+        </div>
+      </div>
+      <div class="products">
+        <article class="product"><div class="product-art">✦</div><div class="product-info"><div class="product-name">DBL 50K–55K iOS</div><div class="price">10.000₫</div><div class="stock">Còn 8 acc</div></div></article>
+        <article class="product"><div class="product-art">✧</div><div class="product-info"><div class="product-name">DBL 60K–65K iOS</div><div class="price">15.000₫</div><div class="stock">Còn 4 acc</div></div></article>
+      </div>
+    </section>
+
+    <section class="category android">
+      <div class="category-head">
+        <span class="brand-mark">
+          <img src="./public/sonna-mark.svg" alt="Logo SONNA">
+        </span>
+        <div class="title"><h2>Reroll DBL Android</h2></div>
+        <div class="stats">
+          <span class="pill platform">ANDROID</span>
+          <span class="pill">Đã bán <strong>84</strong></span>
+          <span class="pill">Còn kho <strong>8</strong></span>
+        </div>
+      </div>
+      <div class="products">
+        <article class="product"><div class="product-art">✦</div><div class="product-info"><div class="product-name">DBL 50K–55K Android</div><div class="price">10.000₫</div><div class="stock">Còn 5 acc</div></div></article>
+        <article class="product"><div class="product-art">✧</div><div class="product-info"><div class="product-name">DBL 60K–65K Android</div><div class="price">15.000₫</div><div class="stock">Còn 3 acc</div></div></article>
+      </div>
+    </section>
+
+    <section class="category meta">
+      <div class="category-head">
+        <span class="brand-mark">
+          <img src="./public/sonna-mark.svg" alt="Logo SONNA">
+        </span>
+        <div class="title"><h2>Team Meta</h2></div>
+        <div class="stats">
+          <span class="pill platform">TEAM META</span>
+          <span class="pill">Đã bán <strong>51</strong></span>
+          <span class="pill">Còn kho <strong>5</strong></span>
+        </div>
+      </div>
+      <div class="products">
+        <article class="product"><div class="product-art">✦</div><div class="product-info"><div class="product-name">Team Meta mùa mới</div><div class="price">90.000₫</div><div class="stock">Còn 2 acc</div></div></article>
+        <article class="product"><div class="product-art">✧</div><div class="product-info"><div class="product-name">Team Meta cân bằng</div><div class="price">75.000₫</div><div class="stock">Còn 3 acc</div></div></article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
