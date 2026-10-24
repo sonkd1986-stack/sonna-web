@@ -147,7 +147,7 @@
 
   var RUNTIME = '';
   var mobileFix = '<style>html,body{margin:0;min-height:100%}@media (max-width: 768px) {  body { -webkit-text-size-adjust: 100%; }  .card { padding: 8px !important; gap: 6px !important; }  .card > div:first-child { height: 75px !important; }  .card > div:first-child svg { width: 60px !important; height: 60px !important; }  div[style*="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"] { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important; gap: 10px !important; }}</style>';
-  var storeMobileFix = '<style>@media (max-width: 768px) { nav[aria-label="Menu chính"] { display: none !important; } }</style>';
+  var storeMobileFix = '<style>@media (max-width: 768px) { .cat-grid { display: none !important; } }</style>';
   var adminCompact = '<style>' +
     '#root{font-size:14px!important}' +
     '#root [style*="font-size:11px"],#root [style*="font-size: 11px"]{font-size:10px!important}' +
@@ -190,7 +190,7 @@
       document.title = 'SONNA - ' + p.title;
       var page = Object.assign({}, p, { hash: hash || '' });
       f.srcdoc = '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-        mobileFix + (k === 'Store' ? storeMobileFix : '') + (k.indexOf('Admin') === 0 ? adminCompact : '') + p.helmet + '</head><body><div id="root"></div><script>window.__PAGE=' +
+        mobileFix + (k.indexOf('Admin') === 0 ? adminCompact : '') + p.helmet + (k === 'Store' ? storeMobileFix : '') + '</head><body><div id="root"></div><script>window.__PAGE=' +
         JSON.stringify(page).replace(/<\//g, '<\\/') + ';<\/script><script>' + RUNTIME + '<\/script></body></html>';
       if (location.hash !== '#' + k) history.replaceState(null, '', '#' + k);
     });

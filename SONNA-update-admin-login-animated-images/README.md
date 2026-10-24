@@ -14,7 +14,7 @@
 - ZIP phát hành chứa mã nguồn, giao diện và cấu hình mẫu; không chứa dữ liệu tài khoản/đơn hàng, cấu hình thanh toán, phiên đăng nhập hoặc ảnh đã tải lên.
 - Khi cập nhật, sao lưu và giữ nguyên thư mục `data/` đang chạy trên máy chủ; chỉ thay các tệp ứng dụng. Không ghi dữ liệu mẫu cục bộ đè lên dữ liệu thật.
 - Khách truy cập chỉ thấy cửa hàng. Để mở trang đăng nhập quản trị, truy cập `/#AdminDashboard`; thanh điều hướng quản trị chỉ hiện sau khi đăng nhập admin thành công.
-- Cửa hàng có liên kết đăng nhập admin ở cuối trang; trên điện thoại, thanh danh mục chính được ẩn để tiết kiệm không gian, còn trên PC vẫn hiển thị.
+- Cửa hàng có liên kết đăng nhập admin ở cuối trang; trên điện thoại, các ô danh mục biểu tượng ngọc rồng trên trang chủ được ẩn để tiết kiệm không gian, còn trên PC vẫn hiển thị. Thanh menu phía trên vẫn giữ nguyên.
 - Đăng nhập từ liên kết cuối trang sẽ tự chuyển vào trang quản trị. Ảnh banner và ảnh acc hỗ trợ GIF/WebP động, tối đa 8 MB mỗi ảnh.
 - Admin > Nội dung website > Màu giao diện cho phép chọn Tím SONNA, Navy hiện đại, Emerald chuyên nghiệp hoặc một màu chủ đạo tùy chỉnh. Chọn “Lưu và đăng” để áp dụng lên màu menu, nút chính, điểm nhấn, huy hiệu và banner mặc định; màu chữ trên nền chủ đạo tự chọn theo độ tương phản để dễ đọc, banner đã tùy chỉnh vẫn được giữ nguyên. Dòng “GAME ACCOUNT STORE” dưới logo đã được tăng kích thước và độ tương phản.
 
