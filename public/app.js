@@ -173,6 +173,11 @@
     '#root>div>main{flex:1 1 100%!important;padding:20px 24px!important;gap:16px!important}' +
     '#root>div>main section{padding:16px!important}' +
     '#root>div>div[style*="max-width:1280px"]{padding:28px 24px!important;gap:20px!important}' +
+    '#root .sonna-scrollbox{overflow-y:scroll!important;scrollbar-width:thin;scrollbar-color:#FF8A1F #1F2538}' +
+    '#root .sonna-scrollbox::-webkit-scrollbar{width:12px}' +
+    '#root .sonna-scrollbox::-webkit-scrollbar-track{background:#1F2538;border-radius:8px}' +
+    '#root .sonna-scrollbox::-webkit-scrollbar-thumb{background:#FF8A1F;border:2px solid #1F2538;border-radius:8px}' +
+    '#root .sonna-scrollbox::-webkit-scrollbar-thumb:hover{background:#FFC24B}' +
     '@media(max-width:768px){#root>div>main{padding:16px!important}#root>div>div[style*="max-width:1280px"]{padding:20px 16px!important}}' +
     '</style>';
 
