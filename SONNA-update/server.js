@@ -325,12 +325,13 @@ function verifySepay(req, raw) {
 }
 function handleSepay(payload) {
   const cfg = payCfg();
-  if (payload.transferType !== 'in') return;
+  if (payload.transferType !== 'in') return { result: 'ignored', reason: 'not_incoming' };
   const txId = String(payload.id);
-  if (!payload.id || depositIds.has(txId)) return; // đã xử lý rồi (SePay gửi lại) -> bỏ qua
-  if (cfg.accountNumber && payload.accountNumber && String(payload.accountNumber) !== String(cfg.accountNumber)) return;
+  if (!payload.id) return { result: 'ignored', reason: 'missing_transaction_id' };
+  if (depositIds.has(txId)) return { result: 'duplicate' };
+  if (cfg.accountNumber && payload.accountNumber && String(payload.accountNumber) !== String(cfg.accountNumber)) return { result: 'ignored', reason: 'account_mismatch' };
   const amount = Math.floor(Number(payload.transferAmount));
-  if (!Number.isFinite(amount) || amount < 1) return;
+  if (!Number.isFinite(amount) || amount < 1) return { result: 'ignored', reason: 'invalid_amount' };
   const prefix = String(cfg.contentPrefix || 'SONNA').replace(/[^A-Za-z0-9]/g, '');
   const m = new RegExp(prefix + '[\\s-]?(\\d{1,9})', 'i').exec(String(payload.content || ''));
   const rec = { txId, amount, content: String(payload.content || ''), bank: payload.gateway || '', time: new Date().toISOString(), bankTime: payload.transactionDate || '' };
@@ -350,6 +351,7 @@ function handleSepay(payload) {
   }
   deposits = nextDeposits;
   depositIds.add(txId);
+  return u ? { result: 'credited' } : { result: 'unmatched', reason: m ? 'member_not_found' : 'payment_reference_not_found' };
 }
 
 // ---------- Khách hàng: users.json, orders.json ----------
@@ -693,8 +695,8 @@ async function handle(req, res) {
         const raw = await readRaw(req);
         if (!verifySepay(req, raw)) return send(res, 401, { success: false });
         let payload; try { payload = JSON.parse(raw); } catch (e) { return send(res, 400, { success: false }); }
-        handleSepay(payload);
-        return send(res, 200, { success: true });
+        const result = handleSepay(payload);
+        return send(res, 200, Object.assign({ success: true }, result));
       }
       if (p === '/api/admin/deposits' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
