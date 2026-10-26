@@ -170,7 +170,26 @@ const PAYMENT_TEMPLATE = {
   sepay: { apiKey: '', hmacSecret: '' }
 };
 if (!fs.existsSync(PAYMENT_FILE)) fs.writeFileSync(PAYMENT_FILE, JSON.stringify(PAYMENT_TEMPLATE, null, 2));
-const payCfg = () => Object.assign({}, PAYMENT_TEMPLATE, readJSON(PAYMENT_FILE, {}));
+function paymentSetting(name, fallback) {
+  const value = process.env[name];
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+const payCfg = () => {
+  const saved = readJSON(PAYMENT_FILE, {});
+  const savedSepay = saved.sepay && typeof saved.sepay === 'object' ? saved.sepay : {};
+  return Object.assign({}, PAYMENT_TEMPLATE, saved, {
+    bankName: paymentSetting('SONNA_BANK_NAME', saved.bankName || PAYMENT_TEMPLATE.bankName),
+    bankShortName: paymentSetting('SONNA_BANK_SHORT_NAME', saved.bankShortName || PAYMENT_TEMPLATE.bankShortName),
+    accountNumber: paymentSetting('SONNA_BANK_ACCOUNT_NUMBER', saved.accountNumber || PAYMENT_TEMPLATE.accountNumber),
+    accountName: paymentSetting('SONNA_BANK_ACCOUNT_NAME', saved.accountName || PAYMENT_TEMPLATE.accountName),
+    contentPrefix: paymentSetting('SONNA_PAYMENT_CONTENT_PREFIX', saved.contentPrefix || PAYMENT_TEMPLATE.contentPrefix),
+    qrTemplate: paymentSetting('SONNA_PAYMENT_QR_TEMPLATE', saved.qrTemplate || PAYMENT_TEMPLATE.qrTemplate),
+    sepay: Object.assign({}, PAYMENT_TEMPLATE.sepay, savedSepay, {
+      apiKey: paymentSetting('SONNA_SEPAY_API_KEY', savedSepay.apiKey || PAYMENT_TEMPLATE.sepay.apiKey),
+      hmacSecret: paymentSetting('SONNA_SEPAY_HMAC_SECRET', savedSepay.hmacSecret || PAYMENT_TEMPLATE.sepay.hmacSecret)
+    })
+  });
+};
 const payReady = () => { const c = payCfg(); return !!(c.accountNumber && c.bankShortName && (c.sepay && (c.sepay.apiKey || c.sepay.hmacSecret))); };
 // Chỉ bật nạp giả lập khi được yêu cầu rõ ràng; mặc định an toàn cho triển khai thật.
 const simTopup = () => process.env.SIM_TOPUP === '1' && !payReady();
