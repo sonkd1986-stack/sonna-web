@@ -64,6 +64,10 @@ h1{margin:0;font-size:clamp(27px,4vw,38px);line-height:1.12;letter-spacing:-.04e
 .badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#eff8f2;color:#18724b;font-size:10px;font-weight:750}
 .badge.purple{background:#f3eafa;color:#5b1f7a}
 .badge.orange{background:#fff1df;color:#a95300}
+.badge.admin{background:#fff1c2;color:#784b00;border:1px solid #edbc45;font-weight:850}
+#communityAuth.admin-login{padding:6px 10px;border:1px solid #ffc24b;border-radius:8px;background:#ffc24b;color:#24143d;font-weight:850;text-decoration:none}
+.avatar.admin-avatar{background:#ffc24b;color:#24143d;border:2px solid #fff1c2}
+.admin-post-author{color:#784b00;font-weight:850}
 .post h3{margin:12px 0 5px;font-size:16px;line-height:1.35}
 .post p{margin:0;color:#655d70;font-size:13px;line-height:1.55;white-space:pre-line}
 .post-actions{display:flex;gap:8px;align-items:center;margin-top:13px;padding-top:11px;border-top:1px solid #f0edf3}
@@ -430,6 +434,137 @@ h1{margin:0;font-size:clamp(27px,4vw,38px);line-height:1.12;letter-spacing:-.04e
     if(!chatMessages[member.id])chatMessages[member.id]=[];
     activeChat=member.id;
     setView('chat');
+  }
+  var baseUpdateIdentity=updateIdentity;
+  updateIdentity=function(){
+    baseUpdateIdentity();
+    $('communityAuth').classList.toggle('admin-login',communityAdmin);
+    $('currentAvatar').classList.toggle('admin-avatar',communityAdmin);
+    if(communityAdmin){$('communityAuth').textContent='SONNA Admin';$('currentAvatar').textContent='★';}
+  };
+  var baseRenderPosts=renderPosts;
+  renderPosts=function(){
+    baseRenderPosts();
+    posts.filter(function(post){return post.isAdmin;}).forEach(function(post){
+      var article=document.querySelector('[data-post="'+esc(post.id)+'"]');
+      if(!article)return;
+      var author=article.querySelector('.post-user button.member-link[data-member="SONNA Admin"]');
+      if(author){var label=document.createElement('strong');label.className='admin-post-author';label.textContent='SONNA Admin';author.replaceWith(label);}
+      var user=article.querySelector('.post-user');
+      if(user&&!user.querySelector('.badge.admin'))user.insertAdjacentHTML('beforeend',' <span class="badge admin">★ QUẢN TRỊ VIÊN</span>');
+    });
+  };
+  var baseRenderAdmin=renderAdmin;
+  renderAdmin=function(){
+    baseRenderAdmin();
+    window.setTimeout(function(){
+      Array.prototype.forEach.call($('adminMembers').querySelectorAll('.profile-post'),function(card){
+        if(card.querySelector('[data-start-chat]'))return;
+        var name=card.querySelector('strong');
+        if(!name)return;
+        var button=document.createElement('button');
+        button.type='button';button.className='button small';button.textContent='Nhắn riêng';button.dataset.startChat=name.textContent;
+        card.appendChild(button);
+      });
+    },0);
+  };
+  openPrivateChat=function(username){
+    if(!communityUser&&!communityAdmin){ensureMember(function(){openPrivateChat(username);});return;}
+    var member=chatMembers.find(function(entry){return entry.name===username;});
+    if(!member){member={id:'dm-'+username,name:username,initial:String(username).slice(0,1).toUpperCase(),subtitle:communityAdmin?'Thành viên SONNA':'Quản trị viên SONNA'};chatMembers.push(member);}
+    if(member.id==='group'||communityUser&&member.name===communityUser.username){say('Chọn một thành viên khác để mở tin nhắn riêng.');return;}
+    activeChat=member.id;
+    setView('chat');
+  };
+  var baseOpenPostModal=openPostModal;
+  openPostModal=function(){
+    if(!communityAdmin){baseOpenPostModal();return;}
+    var selectedImages=[];
+    $('modalContent').innerHTML='<h2 id="modalTitle">Đăng bài với tư cách quản trị viên</h2><p>Bài đăng của quản trị viên sẽ hiển thị ngay. Chỉ nhận ảnh JPEG, PNG, WebP hoặc GIF, tối đa 8 ảnh.</p><form id="adminPostForm"><label class="field">Chuyên mục<select name="category">'+categories.slice(1).map(function(category){return '<option>'+esc(category)+'</option>';}).join('')+'</select></label><label class="field">Tiêu đề<input name="title" maxlength="100" required></label><label class="field">Nội dung<textarea name="body" maxlength="1200" required></textarea></label><label class="field">Ảnh đính kèm<input name="images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><span id="adminPostImageHelp">Có thể chọn nhiều ảnh (tối đa 8 MB mỗi ảnh).</span></label><div class="modal-actions"><button class="button light" type="button" data-close>Hủy</button><button class="button orange" type="submit">Đăng bài</button></div></form>';
+    showModal();
+    var form=$('adminPostForm');
+    form.elements.images.addEventListener('change',function(event){
+      var valid=[],errors=[];
+      Array.prototype.slice.call(event.target.files||[]).forEach(function(file){
+        if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)){errors.push(file.name+': định dạng ảnh không hỗ trợ.');return;}
+        if(file.size>8*1024*1024){errors.push(file.name+': vượt quá 8 MB.');return;}
+        valid.push(file);
+      });
+      if(valid.length>8){errors.push('Mỗi bài viết tối đa 8 ảnh.');valid=valid.slice(0,8);}
+      selectedImages=valid;
+      $('adminPostImageHelp').textContent=errors.length?errors.join(' '):'Đã chọn '+valid.length+' ảnh.';
+    });
+    form.addEventListener('submit',function(event){
+      event.preventDefault();
+      var data=new FormData(form),button=form.querySelector('[type="submit"]');
+      var title=String(data.get('title')||'').trim(),body=String(data.get('body')||'').trim();
+      if(!title||!body)return;
+      button.disabled=true;button.textContent='Đang tải ảnh...';
+      Promise.all(selectedImages.map(function(file){
+        return fileToDataUrl(file).then(function(dataUrl){
+          return request('POST','/api/admin/upload',{dataUrl:dataUrl}).then(function(result){
+            if(result._status!==200)throw new Error(result.error||'Không tải được ảnh lên máy chủ.');
+            return result.url;
+          });
+        });
+      })).then(function(images){
+        button.textContent='Đang đăng...';
+        return request('POST','/api/admin/community/posts',{category:String(data.get('category')),title:title,body:body,images:images});
+      }).then(function(result){
+        if(result._status!==201)throw new Error(result.error||'Không thể đăng bài.');
+        hideModal();refreshPosts();renderAdmin();say('Bài viết của quản trị viên đã được đăng công khai.');
+      }).catch(function(error){
+        console.error('[SONNA] Admin post submit failed:',error);
+        button.disabled=false;button.textContent='Thử đăng lại';say(error.message);
+      });
+    });
+  };
+  renderChat=function(){
+    if(communityUser&&!communityAdmin&&!chatMembers.some(function(member){return member.name==='SONNA Admin';})){
+      chatMembers.push({id:'dm-admin',name:'SONNA Admin',initial:'★',subtitle:'Quản trị viên SONNA'});
+    }
+    var list=$('chatList');
+    list.innerHTML=chatMembers.map(function(member){
+      var messages=chatMessages[member.id]||[],last=messages.length?messages[messages.length-1].text:(member.id==='group'?'Phòng chat chung':'Bắt đầu trò chuyện');
+      return '<button type="button" class="chat-person '+(activeChat===member.id?'active':'')+'" data-chat="'+esc(member.id)+'"><span class="avatar '+(member.name==='SONNA Admin'?'admin-avatar':'')+'">'+esc(member.initial)+'</span><span><strong>'+esc(member.name)+'</strong><small>'+esc(last.slice(0,36))+'</small></span></button>';
+    }).join('');
+    var member=chatMembers.find(function(item){return item.id===activeChat;})||chatMembers[0];
+    $('chatAvatar').textContent=member.initial;$('chatAvatar').classList.toggle('admin-avatar',member.name==='SONNA Admin');$('chatTitle').textContent=member.name;$('chatSubtitle').textContent=member.subtitle;
+    $('chatProfile').classList.toggle('hidden',activeChat==='group'||member.name==='SONNA Admin');
+    $('chatProfile').dataset.member=member.name;
+    var canChat=!!(communityUser||communityAdmin);
+    $('chatNotice').textContent=communityAdmin?'Tin nhắn riêng với thành viên được lưu trên máy chủ và chỉ hiển thị cho hai bên.':'Tin nhắn được lưu trên máy chủ; tin riêng chỉ hiển thị cho hai bên. Không gửi mật khẩu, mã OTP hay thông tin riêng tư.';
+    $('chatForm').querySelector('button').disabled=!canChat;
+    if(!canChat){$('chatMessages').innerHTML='<div class="forum-empty">Đăng nhập để xem và gửi tin nhắn.</div>';return;}
+    var query=activeChat==='group'?'':'?with='+encodeURIComponent(member.name);
+    var endpoint=communityAdmin?'/api/admin/community/chat':'/api/community/chat';
+    request('GET',endpoint+query).then(function(response){
+      if(response._status!==200)throw new Error(response.error||'Không tải được chat.');
+      var messages=response.messages||[];
+      chatMessages[member.id]=messages;
+      $('chatMessages').innerHTML=messages.length?messages.map(function(message){
+        var mine=message.isAdmin?communityAdmin:!!communityUser&&message.author===communityUser.username;
+        var author=message.isAdmin?'<strong class="admin-post-author">★ SONNA Admin</strong>':'<strong>'+esc(message.author)+'</strong>';
+        return '<div class="chat-message '+(mine?'mine':'')+'">'+author+esc(message.text)+'<time>'+esc(message.time||'')+'</time></div>';
+      }).join(''):'<div class="forum-empty">Chưa có tin nhắn. Hãy bắt đầu trò chuyện.</div>';
+      $('chatMessages').scrollTop=$('chatMessages').scrollHeight;
+    }).catch(function(error){console.error('[SONNA] Chat load failed:',error);say(error.message);});
+  };
+  document.addEventListener('submit',function(event){
+    var form=event.target;
+    if(form.id!=='chatForm'||!communityAdmin)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    var text=String(new FormData(form).get('message')||'').trim();
+    if(!text)return;
+    var member=chatMembers.find(function(entry){return entry.id===activeChat;})||chatMembers[0],body={text:text};
+    if(member.id!=='group')body.with=member.name;
+    request('POST','/api/admin/community/chat',body).then(function(response){
+      if(response._status!==201)throw new Error(response.error||'Không gửi được tin nhắn.');
+      form.reset();renderChat();
+    }).catch(function(error){console.error('[SONNA] Admin chat send failed:',error);say(error.message);});
+  },true);
+  if(new URLSearchParams(location.search).get('login')==='1'){
+    syncSession().then(function(){if(!communityUser&&!communityAdmin)openAuthModal();}).catch(function(error){console.error('[SONNA] Login page session check failed:',error);openAuthModal();});
   }
   function openReportModal(postId){$('modalContent').innerHTML='<h2 id="modalTitle">Báo cáo bài viết</h2><p>Chọn lý do rõ ràng để quản trị viên xem xét. Báo cáo không tự động xóa bài.</p><form id="reportForm" data-report-post="'+esc(postId)+'"><label class="field">Lý do báo cáo<textarea name="reason" maxlength="300" required placeholder="Spam, nội dung xúc phạm, lộ thông tin cá nhân..."></textarea></label><div class="modal-actions"><button class="button light" type="button" data-close>Hủy</button><button class="button danger" type="submit">Gửi báo cáo</button></div></form>';showModal();}
   function fileToDataUrl(file){return new Promise(function(resolve,reject){var reader=new FileReader();reader.onload=function(){resolve(String(reader.result||''));};reader.onerror=function(){reject(reader.error||new Error('Không đọc được ảnh.'));};reader.readAsDataURL(file);});}

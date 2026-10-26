@@ -201,7 +201,16 @@ function publicPayment() {
 }
 function publicImages(images) {
   return Array.isArray(images)
-    ? images.filter(image => typeof image === 'string' && /^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image)).slice(0, 5)
+    ? images.filter(image => {
+      if (typeof image !== 'string') return false;
+      if (/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image)) return true;
+      try {
+        const url = new URL(image);
+        return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password;
+      } catch (e) {
+        return false;
+      }
+    }).slice(0, 5)
     : [];
 }
 function priceAmount(value) {
@@ -394,8 +403,9 @@ function publicCommunityPost(post) {
       const commenter = usersDb.users.find(user => user.id === comment.userId);
       return [commenter ? commenter.username : 'Thành viên', comment.text];
     }) : [],
-    author: author ? author.username : 'Tài khoản đã khóa', initial: author ? author.username.slice(0, 1).toUpperCase() : '?',
-    verified: !!author, pinned: !!post.pinned, time: fmtTime(new Date(post.createdAt))
+    author: post.isAdmin ? 'SONNA Admin' : author ? author.username : 'Tài khoản đã khóa',
+    initial: post.isAdmin ? 'S' : author ? author.username.slice(0, 1).toUpperCase() : '?',
+    isAdmin: !!post.isAdmin, verified: !!author, pinned: !!post.pinned, time: fmtTime(new Date(post.createdAt))
   };
 }
 function communityNotification(userId, type, post, actor, text) {
@@ -408,6 +418,9 @@ function communityNotification(userId, type, post, actor, text) {
 function communityConversationId(userId, otherUserId) {
   const ids = [Number(userId), Number(otherUserId)].sort((a, b) => a - b);
   return 'dm-' + ids[0] + '-' + ids[1];
+}
+function communityAdminConversationId(userId) {
+  return 'dm-admin-' + Number(userId);
 }
 const cSessions = new Map(); // token -> {id, exp}
 function getCookie(req, name) {
@@ -852,22 +865,58 @@ async function handle(req, res) {
           const body = await readBody(req);
           const requestedRecipient = String(body.with || '').trim();
           if (requestedRecipient) {
-            otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === requestedRecipient.toLowerCase() && !entry.locked);
-            if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
-            conversationId = communityConversationId(user.id, otherUser.id);
+            if (requestedRecipient.toLowerCase() === 'sonna admin' || requestedRecipient.toLowerCase() === 'admin') {
+              conversationId = communityAdminConversationId(user.id);
+            } else {
+              otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === requestedRecipient.toLowerCase() && !entry.locked);
+              if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
+              conversationId = communityConversationId(user.id, otherUser.id);
+            }
           }
           const text = String(body.text || '').trim();
           if (!text || text.length > 500) return send(res, 400, { error: 'Tin nhắn cần từ 1 đến 500 ký tự.' });
-          communityDb.messages.push({ conversationId, senderId: user.id, text, createdAt: new Date().toISOString() });
+          communityDb.messages.push({ conversationId, senderId: user.id, senderRole: 'member', text, createdAt: new Date().toISOString() });
           writeJSON(COMMUNITY_FILE, communityDb);
         } else if (withName) {
-          otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === withName.toLowerCase() && !entry.locked);
-          if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
-          conversationId = communityConversationId(user.id, otherUser.id);
+          if (withName.toLowerCase() === 'sonna admin' || withName.toLowerCase() === 'admin') {
+            conversationId = communityAdminConversationId(user.id);
+          } else {
+            otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === withName.toLowerCase() && !entry.locked);
+            if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
+            conversationId = communityConversationId(user.id, otherUser.id);
+          }
         }
         const messages = communityDb.messages.filter(message => message.conversationId === conversationId).slice(-200).map(message => {
           const sender = usersDb.users.find(entry => entry.id === message.senderId);
-          return { author: sender ? sender.username : 'Thành viên', text: message.text, time: fmtTime(new Date(message.createdAt)) };
+          const isAdmin = message.senderRole === 'admin' || message.senderId === 0;
+          return { author: isAdmin ? 'SONNA Admin' : sender ? sender.username : 'Thành viên', isAdmin, text: message.text, time: fmtTime(new Date(message.createdAt)) };
+        });
+        return send(res, req.method === 'POST' ? 201 : 200, { conversationId, messages });
+      }
+      if (p === '/api/admin/community/chat' && (req.method === 'GET' || req.method === 'POST')) {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        let requestedRecipient = String(url.searchParams.get('with') || '').trim();
+        let text = '';
+        if (req.method === 'POST') {
+          const body = await readBody(req);
+          requestedRecipient = String(body.with || '').trim();
+          text = String(body.text || '').trim();
+          if (!text || text.length > 500) return send(res, 400, { error: 'Tin nhắn cần từ 1 đến 500 ký tự.' });
+        }
+        let conversationId = 'group';
+        if (requestedRecipient) {
+          const recipient = usersDb.users.find(entry => entry.username.toLowerCase() === requestedRecipient.toLowerCase() && !entry.locked);
+          if (!recipient) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
+          conversationId = communityAdminConversationId(recipient.id);
+        }
+        if (req.method === 'POST') {
+          communityDb.messages.push({ conversationId, senderId: 0, senderRole: 'admin', text, createdAt: new Date().toISOString() });
+          writeJSON(COMMUNITY_FILE, communityDb);
+        }
+        const messages = communityDb.messages.filter(message => message.conversationId === conversationId).slice(-200).map(message => {
+          const sender = usersDb.users.find(entry => entry.id === message.senderId);
+          const isAdmin = message.senderRole === 'admin' || message.senderId === 0;
+          return { author: isAdmin ? 'SONNA Admin' : sender ? sender.username : 'Thành viên', isAdmin, text: message.text, time: fmtTime(new Date(message.createdAt)) };
         });
         return send(res, req.method === 'POST' ? 201 : 200, { conversationId, messages });
       }
@@ -882,6 +931,21 @@ async function handle(req, res) {
           }),
           members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').length, locked: !!user.locked }))
         });
+      }
+      if (p === '/api/admin/community/posts' && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const body = await readBody(req);
+        const category = String(body.category || '').trim();
+        const title = String(body.title || '').trim();
+        const text = String(body.body || '').trim();
+        const allowedCategories = ['Thảo luận chung', 'Hướng dẫn / Build đội hình', 'Sự kiện', 'Khoe acc', 'Tìm bang hội', 'Góp ý'];
+        const images = Array.isArray(body.images) ? body.images : [];
+        if (!allowedCategories.includes(category) || !title || title.length > 100 || !text || text.length > 1200) return send(res, 400, { error: 'Chuyên mục, tiêu đề hoặc nội dung không hợp lệ.' });
+        if (images.length > 8 || images.some(image => typeof image !== 'string' || !/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh).' });
+        const post = { id: communityDb.nextPostId++, userId: 0, isAdmin: true, category, title, body: text, images, likes: [], comments: [], status: 'approved', locked: false, pinned: false, createdAt: new Date().toISOString() };
+        communityDb.posts.push(post);
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 201, { post: publicCommunityPost(post) });
       }
       const adminModeratePostMatch = /^\/api\/admin\/community\/posts\/(\d+)\/moderate$/.exec(p);
       if (adminModeratePostMatch && req.method === 'POST') {
