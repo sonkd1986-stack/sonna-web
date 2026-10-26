@@ -37,6 +37,7 @@ function migrateImages(node) {
 }
 const USERS_FILE = path.join(DATA, 'users.json');
 const ORDERS_FILE = path.join(DATA, 'orders.json');
+const COMMUNITY_FILE = path.join(DATA, 'community.json');
 const ACCOUNTS_FILE = path.join(DATA, 'accounts.json');
 const SESSION_FILE = path.join(DATA, 'sessions.json');
 const DEFAULTS = readJSONEarly(path.join(DATA, 'defaults.json'), { codes: {} });
@@ -333,6 +334,27 @@ function handleSepay(payload) {
 // ---------- Khách hàng: users.json, orders.json ----------
 let usersDb = readJSON(USERS_FILE, { nextId: 28, users: [] });
 let orders = readJSON(ORDERS_FILE, []);
+let communityDb = readJSON(COMMUNITY_FILE, { nextPostId: 1, posts: [] });
+if (!communityDb || !Array.isArray(communityDb.posts)) communityDb = { nextPostId: 1, posts: [] };
+if (!Array.isArray(communityDb.messages)) communityDb.messages = [];
+communityDb.nextPostId = Math.max(Number(communityDb.nextPostId) || 1, ...communityDb.posts.map(post => Number(post.id) + 1 || 1));
+function publicCommunityPost(post) {
+  const author = usersDb.users.find(user => user.id === post.userId);
+  return {
+    id: post.id, category: post.category, title: post.title, body: post.body,
+    images: Array.isArray(post.images) ? post.images : [], likes: Array.isArray(post.likes) ? post.likes.length : 0,
+    comments: Array.isArray(post.comments) ? post.comments.map(comment => {
+      const commenter = usersDb.users.find(user => user.id === comment.userId);
+      return [commenter ? commenter.username : 'Thành viên', comment.text];
+    }) : [],
+    author: author ? author.username : 'Tài khoản đã khóa', initial: author ? author.username.slice(0, 1).toUpperCase() : '?',
+    verified: !!author, pinned: !!post.pinned, time: fmtTime(new Date(post.createdAt))
+  };
+}
+function communityConversationId(userId, otherUserId) {
+  const ids = [Number(userId), Number(otherUserId)].sort((a, b) => a - b);
+  return 'dm-' + ids[0] + '-' + ids[1];
+}
 const cSessions = new Map(); // token -> {id, exp}
 function getCookie(req, name) {
   const m = new RegExp('(?:^|;\\s*)' + name + '=([a-f0-9]{48})').exec(req.headers.cookie || '');
@@ -661,6 +683,114 @@ async function handle(req, res) {
       if (p === '/api/user/me' && req.method === 'GET') {
         const u = getUser(req);
         return send(res, 200, { user: publicUser(u), orders: u ? userOrders(u) : [] });
+      }
+      if (p === '/api/community/posts' && req.method === 'GET') {
+        const viewer = getUser(req);
+        return send(res, 200, { posts: communityDb.posts.filter(post => !post.deletedAt).slice().reverse().map(post => ({
+          ...publicCommunityPost(post), likedByMe: !!(viewer && Array.isArray(post.likes) && post.likes.includes(viewer.id))
+        })) });
+      }
+      if (p === '/api/community/members' && req.method === 'GET') {
+        const members = usersDb.users.filter(user => !user.locked).map(user => ({
+          id: user.id, username: user.username,
+          postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).length
+        }));
+        return send(res, 200, { members });
+      }
+      if (p === '/api/community/posts' && req.method === 'POST') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để đăng bài.' });
+        const body = await readBody(req);
+        const category = String(body.category || '').trim();
+        const title = String(body.title || '').trim();
+        const text = String(body.body || '').trim();
+        const allowedCategories = ['Thảo luận chung', 'Hướng dẫn / Build đội hình', 'Sự kiện', 'Khoe acc', 'Tìm bang hội', 'Góp ý'];
+        const images = Array.isArray(body.images) ? body.images : [];
+        if (!allowedCategories.includes(category) || !title || title.length > 100 || !text || text.length > 1200) return send(res, 400, { error: 'Chuyên mục, tiêu đề hoặc nội dung không hợp lệ.' });
+        if (images.length > 8 || images.some(image => typeof image !== 'string' || !/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh).' });
+        const post = { id: communityDb.nextPostId++, userId: user.id, category, title, body: text, images, likes: [], comments: [], createdAt: new Date().toISOString() };
+        communityDb.posts.push(post);
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 201, { post: publicCommunityPost(post) });
+      }
+      const communityActionMatch = /^\/api\/community\/posts\/(\d+)\/(comments|likes)$/.exec(p);
+      if (communityActionMatch && req.method === 'POST') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để tương tác.' });
+        const post = communityDb.posts.find(entry => entry.id === Number(communityActionMatch[1]) && !entry.deletedAt);
+        if (!post) return send(res, 404, { error: 'Không tìm thấy bài viết.' });
+        if (communityActionMatch[2] === 'comments') {
+          const text = String((await readBody(req)).text || '').trim();
+          if (!text || text.length > 240) return send(res, 400, { error: 'Bình luận cần từ 1 đến 240 ký tự.' });
+          post.comments = Array.isArray(post.comments) ? post.comments : [];
+          post.comments.push({ userId: user.id, text, createdAt: new Date().toISOString() });
+        } else {
+          post.likes = Array.isArray(post.likes) ? post.likes : [];
+          if (post.likes.includes(user.id)) post.likes = post.likes.filter(id => id !== user.id);
+          else post.likes.push(user.id);
+        }
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { post: publicCommunityPost(post) });
+      }
+      const communityMemberMatch = /^\/api\/community\/members\/([A-Za-z0-9_.-]{3,30})$/.exec(p);
+      if (communityMemberMatch && req.method === 'GET') {
+        const username = decodeURIComponent(communityMemberMatch[1]);
+        const adminViewer = isAuthed(req);
+        const user = usersDb.users.find(entry => entry.username.toLowerCase() === username.toLowerCase() && (!entry.locked || adminViewer));
+        if (!user) return send(res, 404, { error: 'Không tìm thấy thành viên.' });
+        const memberPosts = communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).slice().reverse().map(publicCommunityPost);
+        const memberOrders = orders.filter(order => order.userId === user.id);
+        return send(res, 200, { profile: { id: user.id, username: user.username, createdAt: user.createdAt, postCount: memberPosts.length, orderCount: memberOrders.length, locked: !!user.locked }, posts: memberPosts });
+      }
+      if (p === '/api/community/images' && req.method === 'POST') {
+        if (!getUser(req)) return send(res, 401, { error: 'Đăng nhập thành viên để tải ảnh.' });
+        const body = await readBody(req);
+        const imageUrl = saveDataUrl(String(body.dataUrl || ''));
+        if (!imageUrl) return send(res, 400, { error: 'Ảnh không hợp lệ hoặc vượt quá 8 MB (JPG, PNG, WebP, GIF).' });
+        return send(res, 201, { url: imageUrl });
+      }
+      if (p === '/api/community/chat' && (req.method === 'GET' || req.method === 'POST')) {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để sử dụng chat.' });
+        let conversationId = 'group';
+        let otherUser = null;
+        const withName = String(url.searchParams.get('with') || '').trim();
+        if (req.method === 'POST') {
+          const body = await readBody(req);
+          const requestedRecipient = String(body.with || '').trim();
+          if (requestedRecipient) {
+            otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === requestedRecipient.toLowerCase() && !entry.locked);
+            if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
+            conversationId = communityConversationId(user.id, otherUser.id);
+          }
+          const text = String(body.text || '').trim();
+          if (!text || text.length > 500) return send(res, 400, { error: 'Tin nhắn cần từ 1 đến 500 ký tự.' });
+          communityDb.messages.push({ conversationId, senderId: user.id, text, createdAt: new Date().toISOString() });
+          writeJSON(COMMUNITY_FILE, communityDb);
+        } else if (withName) {
+          otherUser = usersDb.users.find(entry => entry.username.toLowerCase() === withName.toLowerCase() && !entry.locked);
+          if (!otherUser || otherUser.id === user.id) return send(res, 404, { error: 'Không tìm thấy thành viên để nhắn riêng.' });
+          conversationId = communityConversationId(user.id, otherUser.id);
+        }
+        const messages = communityDb.messages.filter(message => message.conversationId === conversationId).slice(-200).map(message => {
+          const sender = usersDb.users.find(entry => entry.id === message.senderId);
+          return { author: sender ? sender.username : 'Thành viên', text: message.text, time: fmtTime(new Date(message.createdAt)) };
+        });
+        return send(res, req.method === 'POST' ? 201 : 200, { conversationId, messages });
+      }
+      if (p === '/api/admin/community/posts' && req.method === 'GET') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        return send(res, 200, { posts: communityDb.posts.filter(post => !post.deletedAt).slice().reverse().map(publicCommunityPost), members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).length, locked: !!user.locked })) });
+      }
+      const adminCommunityPostMatch = /^\/api\/admin\/community\/posts\/(\d+)$/.exec(p);
+      if (adminCommunityPostMatch && req.method === 'DELETE') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const post = communityDb.posts.find(entry => entry.id === Number(adminCommunityPostMatch[1]) && !entry.deletedAt);
+        if (!post) return send(res, 404, { error: 'Không tìm thấy bài viết.' });
+        post.deletedAt = new Date().toISOString();
+        post.deletedByAdmin = true;
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { ok: true });
       }
       if ((p === '/api/user/register' || p === '/api/user/login') && req.method === 'POST') {
         if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });

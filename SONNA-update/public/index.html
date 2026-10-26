@@ -16,6 +16,12 @@ button[aria-current="page"]{background:#FF8A1F;color:#1A1206;border-color:#FF8A1
 button:focus-visible{outline:2px solid #52C7FF;outline-offset:2px}
 #note{margin-left:auto;font-size:12px;color:#A3ACC4}
 #bar[data-page^="Admin"] #resetData,#bar[data-page^="Admin"] #note{display:none}
+#community-nav{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;background:#24143d;border-bottom:1px solid #392653}
+#community-nav strong{margin-right:8px;color:#fff;font-size:14px;letter-spacing:.12em}
+#community-nav a{display:inline-flex;align-items:center;min-height:36px;padding:0 13px;border:1px solid #5a4670;border-radius:8px;color:#f6f0fc;text-decoration:none;font-size:13px;font-weight:600}
+#community-nav a:hover,#community-nav a:focus-visible{border-color:#ff8a1f;color:#ffc24b;outline:none}
+#community-nav .community-link{margin-left:auto;border-color:#ff8a1f;background:#ff8a1f;color:#24143d}
+#community-nav .community-link:hover,#community-nav .community-link:focus-visible{background:#ffc24b;color:#24143d}
 iframe{flex:1;border:0;width:100%;background:#0F1320}
 #login{flex:1;display:none;align-items:center;justify-content:center;padding:24px;background:#0F1320}
 #login form{width:100%;max-width:380px;background:#171C2B;border:1px solid #2B3248;border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:14px}
@@ -30,6 +36,11 @@ iframe{flex:1;border:0;width:100%;background:#0F1320}
 </head>
 <body>
 <div id="bar" role="navigation" aria-label="Chọn màn hình"></div>
+<nav id="community-nav" aria-label="Điều hướng SONNA">
+<strong>SONNA</strong>
+<a href="#Store">Cửa hàng</a>
+<a class="community-link" href="/community.html">Diễn đàn &amp; Chợ thành viên · Demo</a>
+</nav>
 <iframe id="f" title="Màn hình thiết kế"></iframe>
 <div id="login"><form id="lf" autocomplete="off">
 <h1>SONNA ADMIN</h1>
