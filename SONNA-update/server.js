@@ -7,9 +7,11 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
-const DATA = path.join(ROOT, 'data');
+const DATA = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
+const CONFIG_DATA = path.join(ROOT, 'data');
 const PAGES_DIR = path.join(ROOT, 'pages');
 const PUBLIC = path.join(ROOT, 'public');
+fs.mkdirSync(DATA, { recursive: true });
 const STORE_FILE = path.join(DATA, 'store.json');
 const ADMIN_FILE = path.join(DATA, 'admin.json');
 const MAX_BODY = 25 * 1024 * 1024;
@@ -40,7 +42,7 @@ const ORDERS_FILE = path.join(DATA, 'orders.json');
 const COMMUNITY_FILE = path.join(DATA, 'community.json');
 const ACCOUNTS_FILE = path.join(DATA, 'accounts.json');
 const SESSION_FILE = path.join(DATA, 'sessions.json');
-const DEFAULTS = readJSONEarly(path.join(DATA, 'defaults.json'), { codes: {} });
+const DEFAULTS = readJSONEarly(path.join(CONFIG_DATA, 'defaults.json'), { codes: {} });
 const PAYMENT_FILE = path.join(DATA, 'payment.json');
 const DEPOSITS_FILE = path.join(DATA, 'deposits.json');
 const TRANSACTION_FILE = path.join(DATA, 'transaction.json');
@@ -49,7 +51,7 @@ function readJSONEarly(f, fallback) {
   return JSON.parse(fs.readFileSync(f, 'utf8'));
 }
 
-const NAV = readJSONEarly(path.join(DATA, 'nav.json'), [
+const NAV = readJSONEarly(path.join(CONFIG_DATA, 'nav.json'), [
   { k: 'Store', label: 'Cửa hàng', group: 'Khách' },
   { k: 'AdminDashboard', label: 'Tổng quan', group: 'Admin' },
   { k: 'AdminAccounts', label: 'Quản lý acc', group: 'Admin' },
@@ -1093,5 +1095,5 @@ async function handle(req, res) {
   });
 }
 
-http.createServer(handle).listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Điền data/payment.json (ngân hàng + khóa SePay) hoặc chạy SIM_TOPUP=0 khi bán thật.');
+http.createServer(handle).listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log(`[SONNA] Dữ liệu lưu tại: ${DATA}`); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Điền data/payment.json (ngân hàng + khóa SePay) hoặc chạy SIM_TOPUP=0 khi bán thật.');
   if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem data/payment.json và README.'); });
