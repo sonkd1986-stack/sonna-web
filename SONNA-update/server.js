@@ -495,7 +495,7 @@ function renameAccountId(oldId, newId) {
 function eligibleAccounts() {
   return accountRecords().filter(a => a && a.cat !== 'promo' && !a.del && a.status === 'Đang bán' && String(a.tk || '').trim() && String(a.mk || '').trim());
 }
-function publicUser(u) { return u ? { id: u.id, username: u.username, wallet: u.wallet, usedCodes: u.usedCodes } : null; }
+function publicUser(u) { return u ? { id: u.id, username: u.username, wallet: u.wallet, usedCodes: u.usedCodes, communityPostAutoApprove: !!u.communityPostAutoApprove } : null; }
 function userOrders(u) { return orders.filter(o => o.userId === u.id).reverse().map(({ userId, ...o }) => o); }
 function fmtTime(d) {
   const t = new Date(d.getTime() + 7 * 3600 * 1000); // giờ Việt Nam
@@ -775,7 +775,7 @@ async function handle(req, res) {
         const images = Array.isArray(body.images) ? body.images : [];
         if (!allowedCategories.includes(category) || !title || title.length > 100 || !text || text.length > 1200) return send(res, 400, { error: 'Chuyên mục, tiêu đề hoặc nội dung không hợp lệ.' });
         if (images.length > 8 || images.some(image => typeof image !== 'string' || !/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh).' });
-        const post = { id: communityDb.nextPostId++, userId: user.id, category, title, body: text, images, likes: [], comments: [], status: 'pending', locked: false, pinned: false, createdAt: new Date().toISOString() };
+        const post = { id: communityDb.nextPostId++, userId: user.id, category, title, body: text, images, likes: [], comments: [], status: user.communityPostAutoApprove ? 'approved' : 'pending', locked: false, pinned: false, createdAt: new Date().toISOString() };
         communityDb.posts.push(post);
         writeJSON(COMMUNITY_FILE, communityDb);
         return send(res, 201, { post: publicCommunityPost(post) });
@@ -929,8 +929,22 @@ async function handle(req, res) {
             const reporter = usersDb.users.find(entry => entry.id === report.userId);
             return { ...report, postTitle: post ? post.title : 'Bài viết đã xóa', reporter: reporter ? reporter.username : 'Thành viên' };
           }),
-          members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').length, locked: !!user.locked }))
+          members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').length, locked: !!user.locked, postWithoutApproval: !!user.communityPostAutoApprove }))
         });
+      }
+      const communityMemberPermissionMatch = /^\/api\/admin\/community\/members\/(\d+)\/post-approval$/.exec(p);
+      if (communityMemberPermissionMatch && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const user = usersDb.users.find(entry => entry.id === Number(communityMemberPermissionMatch[1]));
+        if (!user) return send(res, 404, { error: 'Không tìm thấy thành viên.' });
+        const enabled = (await readBody(req)).enabled;
+        if (typeof enabled !== 'boolean') return send(res, 400, { error: 'Trạng thái quyền đăng trực tiếp không hợp lệ.' });
+        const nextUsers = JSON.parse(JSON.stringify(usersDb));
+        const nextUser = nextUsers.users.find(entry => entry.id === user.id);
+        nextUser.communityPostAutoApprove = enabled;
+        commitState({ [USERS_FILE]: nextUsers });
+        usersDb = nextUsers;
+        return send(res, 200, { ok: true, enabled });
       }
       if (p === '/api/admin/community/posts' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });

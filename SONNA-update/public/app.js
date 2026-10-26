@@ -100,6 +100,13 @@
 
   var bar = document.getElementById('bar'), f = document.getElementById('f'), lg = document.getElementById('login');
   var lo, groups = {};
+  var loginChoice = document.getElementById('login-choice');
+  document.getElementById('login-choice-open').addEventListener('click', function () { loginChoice.showModal(); });
+  document.getElementById('login-choice-close').addEventListener('click', function () { loginChoice.close(); });
+  Array.prototype.forEach.call(loginChoice.querySelectorAll('a'), function (link) {
+    link.addEventListener('click', function () { loginChoice.close(); });
+  });
+  loginChoice.addEventListener('click', function (event) { if (event.target === loginChoice) loginChoice.close(); });
 
   function buildBar() {
     NAV.forEach(function (n) {
