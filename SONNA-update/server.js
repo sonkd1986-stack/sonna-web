@@ -378,11 +378,17 @@ let orders = readJSON(ORDERS_FILE, []);
 let communityDb = readJSON(COMMUNITY_FILE, { nextPostId: 1, posts: [] });
 if (!communityDb || !Array.isArray(communityDb.posts)) communityDb = { nextPostId: 1, posts: [] };
 if (!Array.isArray(communityDb.messages)) communityDb.messages = [];
+if (!Array.isArray(communityDb.notifications)) communityDb.notifications = [];
+if (!Array.isArray(communityDb.reports)) communityDb.reports = [];
 communityDb.nextPostId = Math.max(Number(communityDb.nextPostId) || 1, ...communityDb.posts.map(post => Number(post.id) + 1 || 1));
+communityDb.nextNotificationId = Math.max(Number(communityDb.nextNotificationId) || 1, ...communityDb.notifications.map(notification => Number(notification.id) + 1 || 1));
+communityDb.nextReportId = Math.max(Number(communityDb.nextReportId) || 1, ...communityDb.reports.map(report => Number(report.id) + 1 || 1));
 function publicCommunityPost(post) {
   const author = usersDb.users.find(user => user.id === post.userId);
   return {
     id: post.id, category: post.category, title: post.title, body: post.body,
+    status: post.status === 'pending' || post.status === 'rejected' ? post.status : 'approved',
+    locked: !!post.locked,
     images: Array.isArray(post.images) ? post.images : [], likes: Array.isArray(post.likes) ? post.likes.length : 0,
     comments: Array.isArray(post.comments) ? post.comments.map(comment => {
       const commenter = usersDb.users.find(user => user.id === comment.userId);
@@ -391,6 +397,13 @@ function publicCommunityPost(post) {
     author: author ? author.username : 'Tài khoản đã khóa', initial: author ? author.username.slice(0, 1).toUpperCase() : '?',
     verified: !!author, pinned: !!post.pinned, time: fmtTime(new Date(post.createdAt))
   };
+}
+function communityNotification(userId, type, post, actor, text) {
+  if (!userId || userId === actor.id) return;
+  communityDb.notifications.push({
+    id: communityDb.nextNotificationId++, userId, type, postId: post.id,
+    actorId: actor.id, text, createdAt: new Date().toISOString(), readAt: ''
+  });
 }
 function communityConversationId(userId, otherUserId) {
   const ids = [Number(userId), Number(otherUserId)].sort((a, b) => a - b);
@@ -727,14 +740,14 @@ async function handle(req, res) {
       }
       if (p === '/api/community/posts' && req.method === 'GET') {
         const viewer = getUser(req);
-        return send(res, 200, { posts: communityDb.posts.filter(post => !post.deletedAt).slice().reverse().map(post => ({
+        return send(res, 200, { posts: communityDb.posts.filter(post => !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').slice().reverse().map(post => ({
           ...publicCommunityPost(post), likedByMe: !!(viewer && Array.isArray(post.likes) && post.likes.includes(viewer.id))
         })) });
       }
       if (p === '/api/community/members' && req.method === 'GET') {
         const members = usersDb.users.filter(user => !user.locked).map(user => ({
           id: user.id, username: user.username,
-          postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).length
+          postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').length
         }));
         return send(res, 200, { members });
       }
@@ -749,29 +762,66 @@ async function handle(req, res) {
         const images = Array.isArray(body.images) ? body.images : [];
         if (!allowedCategories.includes(category) || !title || title.length > 100 || !text || text.length > 1200) return send(res, 400, { error: 'Chuyên mục, tiêu đề hoặc nội dung không hợp lệ.' });
         if (images.length > 8 || images.some(image => typeof image !== 'string' || !/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh).' });
-        const post = { id: communityDb.nextPostId++, userId: user.id, category, title, body: text, images, likes: [], comments: [], createdAt: new Date().toISOString() };
+        const post = { id: communityDb.nextPostId++, userId: user.id, category, title, body: text, images, likes: [], comments: [], status: 'pending', locked: false, pinned: false, createdAt: new Date().toISOString() };
         communityDb.posts.push(post);
         writeJSON(COMMUNITY_FILE, communityDb);
         return send(res, 201, { post: publicCommunityPost(post) });
       }
-      const communityActionMatch = /^\/api\/community\/posts\/(\d+)\/(comments|likes)$/.exec(p);
+      const communityActionMatch = /^\/api\/community\/posts\/(\d+)\/(comments|likes|reports)$/.exec(p);
       if (communityActionMatch && req.method === 'POST') {
         const user = getUser(req);
         if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để tương tác.' });
         const post = communityDb.posts.find(entry => entry.id === Number(communityActionMatch[1]) && !entry.deletedAt);
         if (!post) return send(res, 404, { error: 'Không tìm thấy bài viết.' });
+        if (post.status === 'pending' || post.status === 'rejected') return send(res, 404, { error: 'Bài viết chưa được duyệt.' });
+        if (post.locked && communityActionMatch[2] !== 'reports') return send(res, 423, { error: 'Bài viết đã khóa tương tác.' });
         if (communityActionMatch[2] === 'comments') {
           const text = String((await readBody(req)).text || '').trim();
           if (!text || text.length > 240) return send(res, 400, { error: 'Bình luận cần từ 1 đến 240 ký tự.' });
           post.comments = Array.isArray(post.comments) ? post.comments : [];
           post.comments.push({ userId: user.id, text, createdAt: new Date().toISOString() });
-        } else {
+          communityNotification(post.userId, 'reply', post, user, user.username + ' đã trả lời bài viết "' + post.title + '".');
+          const mentions = new Set((text.match(/@[A-Za-z0-9_.-]{3,30}/g) || []).map(name => name.slice(1).toLowerCase()));
+          usersDb.users.filter(member => mentions.has(member.username.toLowerCase())).forEach(member => {
+            communityNotification(member.id, 'mention', post, user, user.username + ' đã nhắc đến bạn trong một bình luận.');
+          });
+        } else if (communityActionMatch[2] === 'likes') {
           post.likes = Array.isArray(post.likes) ? post.likes : [];
           if (post.likes.includes(user.id)) post.likes = post.likes.filter(id => id !== user.id);
           else post.likes.push(user.id);
+        } else {
+          const reason = String((await readBody(req)).reason || '').trim();
+          if (!reason || reason.length > 300) return send(res, 400, { error: 'Vui lòng nhập lý do báo cáo (tối đa 300 ký tự).' });
+          if (communityDb.reports.some(report => report.postId === post.id && report.userId === user.id && report.status === 'open')) return send(res, 409, { error: 'Bạn đã báo cáo bài viết này; admin sẽ xem xét.' });
+          communityDb.reports.push({ id: communityDb.nextReportId++, postId: post.id, userId: user.id, reason, status: 'open', createdAt: new Date().toISOString() });
         }
         writeJSON(COMMUNITY_FILE, communityDb);
         return send(res, 200, { post: publicCommunityPost(post) });
+      }
+      if (p === '/api/community/notifications' && req.method === 'GET') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để xem thông báo.' });
+        const memberNotifications = communityDb.notifications.filter(item => item.userId === user.id);
+        const notifications = memberNotifications.slice().reverse().slice(0, 50);
+        return send(res, 200, { notifications, unreadCount: memberNotifications.filter(item => !item.readAt).length });
+      }
+      if (p === '/api/community/notifications/read-all' && req.method === 'POST') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để cập nhật thông báo.' });
+        const readAt = new Date().toISOString();
+        communityDb.notifications.forEach(item => { if (item.userId === user.id && !item.readAt) item.readAt = readAt; });
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { ok: true });
+      }
+      const communityNotificationMatch = /^\/api\/community\/notifications\/(\d+)\/read$/.exec(p);
+      if (communityNotificationMatch && req.method === 'POST') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để cập nhật thông báo.' });
+        const notification = communityDb.notifications.find(item => item.id === Number(communityNotificationMatch[1]) && item.userId === user.id);
+        if (!notification) return send(res, 404, { error: 'Không tìm thấy thông báo.' });
+        notification.readAt = notification.readAt || new Date().toISOString();
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { ok: true });
       }
       const communityMemberMatch = /^\/api\/community\/members\/([A-Za-z0-9_.-]{3,30})$/.exec(p);
       if (communityMemberMatch && req.method === 'GET') {
@@ -779,9 +829,11 @@ async function handle(req, res) {
         const adminViewer = isAuthed(req);
         const user = usersDb.users.find(entry => entry.username.toLowerCase() === username.toLowerCase() && (!entry.locked || adminViewer));
         if (!user) return send(res, 404, { error: 'Không tìm thấy thành viên.' });
-        const memberPosts = communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).slice().reverse().map(publicCommunityPost);
+        const memberPosts = communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').slice().reverse().map(publicCommunityPost);
         const memberOrders = orders.filter(order => order.userId === user.id);
-        return send(res, 200, { profile: { id: user.id, username: user.username, createdAt: user.createdAt, postCount: memberPosts.length, orderCount: memberOrders.length, locked: !!user.locked }, posts: memberPosts });
+        const reputation = memberPosts.reduce((total, post) => total + (Number(post.likes) || 0), 0);
+        const rank = memberPosts.length >= 50 ? 'Thành viên nòng cốt' : memberPosts.length >= 10 ? 'Thành viên tích cực' : 'Thành viên mới';
+        return send(res, 200, { profile: { id: user.id, username: user.username, createdAt: user.createdAt, postCount: memberPosts.length, reputation, rank, orderCount: memberOrders.length, locked: !!user.locked }, posts: memberPosts });
       }
       if (p === '/api/community/images' && req.method === 'POST') {
         if (!getUser(req)) return send(res, 401, { error: 'Đăng nhập thành viên để tải ảnh.' });
@@ -821,7 +873,43 @@ async function handle(req, res) {
       }
       if (p === '/api/admin/community/posts' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
-        return send(res, 200, { posts: communityDb.posts.filter(post => !post.deletedAt).slice().reverse().map(publicCommunityPost), members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt).length, locked: !!user.locked })) });
+        return send(res, 200, {
+          posts: communityDb.posts.filter(post => !post.deletedAt).slice().reverse().map(publicCommunityPost),
+          reports: communityDb.reports.filter(report => report.status === 'open').slice().reverse().map(report => {
+            const post = communityDb.posts.find(entry => entry.id === report.postId);
+            const reporter = usersDb.users.find(entry => entry.id === report.userId);
+            return { ...report, postTitle: post ? post.title : 'Bài viết đã xóa', reporter: reporter ? reporter.username : 'Thành viên' };
+          }),
+          members: usersDb.users.map(user => ({ id: user.id, username: user.username, postCount: communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').length, locked: !!user.locked }))
+        });
+      }
+      const adminModeratePostMatch = /^\/api\/admin\/community\/posts\/(\d+)\/moderate$/.exec(p);
+      if (adminModeratePostMatch && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const post = communityDb.posts.find(entry => entry.id === Number(adminModeratePostMatch[1]) && !entry.deletedAt);
+        if (!post) return send(res, 404, { error: 'Không tìm thấy bài viết.' });
+        const action = String((await readBody(req)).action || '');
+        if (action === 'approve') {
+          post.status = 'approved';
+          communityNotification(post.userId, 'approved', post, { id: 0 }, 'Bài viết "' + post.title + '" đã được duyệt và đăng công khai.');
+        } else if (action === 'reject') {
+          post.status = 'rejected';
+          communityNotification(post.userId, 'rejected', post, { id: 0 }, 'Bài viết "' + post.title + '" chưa được duyệt. Vui lòng xem lại nội quy cộng đồng.');
+        } else if (action === 'pin') post.pinned = !post.pinned;
+        else if (action === 'lock') post.locked = !post.locked;
+        else return send(res, 400, { error: 'Thao tác kiểm duyệt không hợp lệ.' });
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { ok: true, post: publicCommunityPost(post) });
+      }
+      const adminResolveReportMatch = /^\/api\/admin\/community\/reports\/(\d+)\/resolve$/.exec(p);
+      if (adminResolveReportMatch && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const report = communityDb.reports.find(entry => entry.id === Number(adminResolveReportMatch[1]) && entry.status === 'open');
+        if (!report) return send(res, 404, { error: 'Không tìm thấy báo cáo đang mở.' });
+        report.status = 'resolved';
+        report.resolvedAt = new Date().toISOString();
+        writeJSON(COMMUNITY_FILE, communityDb);
+        return send(res, 200, { ok: true });
       }
       const adminCommunityPostMatch = /^\/api\/admin\/community\/posts\/(\d+)$/.exec(p);
       if (adminCommunityPostMatch && req.method === 'DELETE') {
