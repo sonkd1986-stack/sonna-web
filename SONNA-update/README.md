@@ -41,7 +41,7 @@ Luồng: khách chuyển khoản đúng nội dung `SONNA<ID>` (ví dụ `SONNA2
 4. Khởi động lại server. Nạp giả lập **mặc định tắt**; chỉ bật rõ ràng bằng `SIM_TOPUP=1` khi thử nghiệm cục bộ. `SIM_TOPUP=0` luôn giữ chức năng này tắt. Khi cấu hình SePay hợp lệ, giả lập vẫn bị khóa.
 - SePay chỉ gọi được địa chỉ công khai có HTTPS, nên cần đưa web lên mạng (hoặc dùng ngrok để thử).
 - SePay gửi lại webhook khi lỗi: máy chủ chống cộng trùng theo mã giao dịch.
-- Phản hồi webhook có trường `result` để đối chiếu trong delivery log: `credited` = đã cộng ví, `unmatched` = giao dịch đã lưu nhưng không ghép được thành viên, `duplicate` = mã giao dịch đã xử lý trước đó, `ignored` kèm `reason` = sai loại giao dịch/tài khoản/ID/số tiền. HTTP 200 chỉ xác nhận máy chủ đã nhận và xử lý request; hãy xem `result`, không chỉ nhìn mã HTTP.
+- Phản hồi webhook có trường `result` để đối chiếu trong delivery log: `credited` = đã cộng ví, `unmatched` = giao dịch đã lưu nhưng không ghép được thành viên, `duplicate` = mã giao dịch đã xử lý trước đó, `ignored` kèm `reason` = sai loại giao dịch/tài khoản/ID/số tiền. Các giao dịch bị bỏ qua do sai tài khoản/số tiền được lưu để admin xem trong lịch sử nạp. HTTP 200 chỉ xác nhận máy chủ đã nhận và xử lý request; hãy xem `result`, không chỉ nhìn mã HTTP.
 - Tiền vào mà nội dung sai (không tìm thấy ID khách) được ghi `unmatched` trong `deposits.json`. Xem: `GET /api/admin/deposits` (đăng nhập admin). Cộng ví tay: `POST /api/admin/users/<id>/wallet` với `{"delta": 50000}`.
 - Mã QR dùng mẫu `qrTemplate` trong `payment.json`; nếu ảnh QR không hiện, sửa mẫu theo tài liệu SePay.
 - Thưởng nạp mặc định TẮT (nạp bao nhiêu nhận bấy nhiêu). Bật trong Admin > Thanh toán > Khuyến mãi nạp.

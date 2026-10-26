@@ -325,16 +325,27 @@ function verifySepay(req, raw) {
 }
 function handleSepay(payload) {
   const cfg = payCfg();
-  if (payload.transferType !== 'in') return { result: 'ignored', reason: 'not_incoming' };
+  if (String(payload.transferType || '').trim().toLowerCase() !== 'in') return { result: 'ignored', reason: 'not_incoming' };
   const txId = String(payload.id);
   if (!payload.id) return { result: 'ignored', reason: 'missing_transaction_id' };
-  if (depositIds.has(txId)) return { result: 'duplicate' };
-  if (cfg.accountNumber && payload.accountNumber && String(payload.accountNumber) !== String(cfg.accountNumber)) return { result: 'ignored', reason: 'account_mismatch' };
+  if (depositIds.has(txId)) {
+    const previous = deposits.find(deposit => String(deposit.txId) === txId);
+    return { result: 'duplicate', previousStatus: previous && previous.status || 'processed', reason: previous && previous.reason || undefined };
+  }
+  const rec = { txId, amount: Math.floor(Number(payload.transferAmount)) || 0, content: String(payload.content || ''), bank: payload.gateway || '', time: new Date().toISOString(), bankTime: payload.transactionDate || '' };
+  const ignore = reason => {
+    Object.assign(rec, { status: 'ignored', reason });
+    const nextDeposits = deposits.concat(rec);
+    commitState({ [DEPOSITS_FILE]: nextDeposits });
+    deposits = nextDeposits;
+    depositIds.add(txId);
+    return { result: 'ignored', reason };
+  };
+  if (cfg.accountNumber && payload.accountNumber && String(payload.accountNumber).replace(/\s/g, '') !== String(cfg.accountNumber).replace(/\s/g, '')) return ignore('account_mismatch');
   const amount = Math.floor(Number(payload.transferAmount));
-  if (!Number.isFinite(amount) || amount < 1) return { result: 'ignored', reason: 'invalid_amount' };
+  if (!Number.isFinite(amount) || amount < 1) return ignore('invalid_amount');
   const prefix = String(cfg.contentPrefix || 'SONNA').replace(/[^A-Za-z0-9]/g, '');
-  const m = new RegExp(prefix + '[\\s-]?(\\d{1,9})', 'i').exec(String(payload.content || ''));
-  const rec = { txId, amount, content: String(payload.content || ''), bank: payload.gateway || '', time: new Date().toISOString(), bankTime: payload.transactionDate || '' };
+  const m = new RegExp(prefix + '[\\s_-]*(\\d{1,9})', 'i').exec(rec.content);
   const u = m ? usersDb.users.find(x => x.id === Number(m[1])) : null;
   const nextDeposits = deposits.concat(rec);
   if (u) {
