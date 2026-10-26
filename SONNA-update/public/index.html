@@ -18,20 +18,10 @@ button:focus-visible{outline:2px solid #52C7FF;outline-offset:2px}
 #bar[data-page^="Admin"] #resetData,#bar[data-page^="Admin"] #note{display:none}
 #community-nav{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;background:#24143d;border-bottom:1px solid #392653}
 #community-nav strong{margin-right:8px;color:#fff;font-size:14px;letter-spacing:.12em}
-#community-nav a,#community-nav button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 13px;border:1px solid #5a4670;border-radius:8px;color:#f6f0fc;text-decoration:none;font-size:13px;font-weight:600}
-#community-nav button{background:transparent;font-family:inherit}
-#community-nav a:hover,#community-nav a:focus-visible,#community-nav button:hover,#community-nav button:focus-visible{border-color:#ff8a1f;color:#ffc24b;outline:none}
+#community-nav a{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 13px;border:1px solid #5a4670;border-radius:8px;color:#f6f0fc;text-decoration:none;font-size:13px;font-weight:600}
+#community-nav a:hover,#community-nav a:focus-visible{border-color:#ff8a1f;color:#ffc24b;outline:none}
 #community-nav .community-link{margin-left:auto;border-color:#ff8a1f;background:#ff8a1f;color:#24143d}
 #community-nav .community-link:hover,#community-nav .community-link:focus-visible{background:#ffc24b;color:#24143d}
-#login-choice{width:min(420px,calc(100% - 44px));padding:24px;border:1px solid #51416b;border-radius:16px;background:#171C2B;color:#EAEFFA;box-shadow:0 24px 80px #0008}
-#login-choice::backdrop{background:#10091dbb;backdrop-filter:blur(3px)}
-#login-choice h2{margin:0 0 8px;font-size:22px}
-#login-choice p{margin:0 0 18px;color:#A3ACC4;font-size:14px;line-height:1.5}
-.login-choice-options{display:grid;gap:10px}
-.login-choice-options a{display:flex;align-items:center;justify-content:center;min-height:46px;padding:0 14px;border:1px solid #5a4670;border-radius:9px;color:#f6f0fc;text-decoration:none;font-weight:700}
-.login-choice-options a:first-child{border-color:#ff8a1f;background:#ff8a1f;color:#24143d}
-.login-choice-options a:hover,.login-choice-options a:focus-visible{filter:brightness(1.12);outline:2px solid #52C7FF;outline-offset:2px}
-#login-choice-close{display:block;margin:16px 0 0 auto}
 iframe{flex:1;border:0;width:100%;background:#0F1320}
 #login{flex:1;display:none;align-items:center;justify-content:center;padding:24px;background:#0F1320}
 #login form{width:100%;max-width:380px;background:#171C2B;border:1px solid #2B3248;border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:14px}
@@ -50,17 +40,7 @@ iframe{flex:1;border:0;width:100%;background:#0F1320}
 <strong>SONNA</strong>
 <a href="#Store">Cửa hàng</a>
 <a class="community-link" href="/community.html">Diễn đàn &amp; Chợ thành viên</a>
-<button id="login-choice-open" type="button">Đăng nhập</button>
 </nav>
-<dialog id="login-choice" aria-labelledby="login-choice-title" aria-describedby="login-choice-description">
-<h2 id="login-choice-title">Đăng nhập SONNA</h2>
-<p id="login-choice-description">Chọn loại tài khoản bạn muốn đăng nhập.</p>
-<div class="login-choice-options">
-<a href="/community.html?login=1">Đăng nhập thành viên</a>
-<a href="/#AdminDashboard">Đăng nhập admin</a>
-</div>
-<button id="login-choice-close" type="button">Đóng</button>
-</dialog>
 <iframe id="f" title="Màn hình thiết kế"></iframe>
 <div id="login"><form id="lf" autocomplete="off">
 <h1>SONNA ADMIN</h1>
