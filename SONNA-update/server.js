@@ -181,6 +181,7 @@ const payCfg = () => {
     bankName: paymentSetting('SONNA_BANK_NAME', saved.bankName || PAYMENT_TEMPLATE.bankName),
     bankShortName: paymentSetting('SONNA_BANK_SHORT_NAME', saved.bankShortName || PAYMENT_TEMPLATE.bankShortName),
     accountNumber: paymentSetting('SONNA_BANK_ACCOUNT_NUMBER', saved.accountNumber || PAYMENT_TEMPLATE.accountNumber),
+    qrAccountNumber: paymentSetting('SONNA_BANK_VA_NUMBER', saved.qrAccountNumber || saved.accountNumber || PAYMENT_TEMPLATE.accountNumber),
     accountName: paymentSetting('SONNA_BANK_ACCOUNT_NAME', saved.accountName || PAYMENT_TEMPLATE.accountName),
     contentPrefix: paymentSetting('SONNA_PAYMENT_CONTENT_PREFIX', saved.contentPrefix || PAYMENT_TEMPLATE.contentPrefix),
     qrTemplate: paymentSetting('SONNA_PAYMENT_QR_TEMPLATE', saved.qrTemplate || PAYMENT_TEMPLATE.qrTemplate),
@@ -195,7 +196,7 @@ const payReady = () => { const c = payCfg(); return !!(c.accountNumber && c.bank
 const simTopup = () => process.env.SIM_TOPUP === '1' && !payReady();
 function publicPayment() {
   const c = payCfg();
-  return { ready: payReady(), bankName: c.bankName || c.bankShortName, bankShortName: c.bankShortName, accountNumber: c.accountNumber,
+  return { ready: payReady(), bankName: c.bankName || c.bankShortName, bankShortName: c.bankShortName, accountNumber: c.accountNumber, qrAccountNumber: c.qrAccountNumber || c.accountNumber,
     accountName: c.accountName, contentPrefix: c.contentPrefix || 'SONNA', qrTemplate: c.qrTemplate };
 }
 function publicImages(images) {
