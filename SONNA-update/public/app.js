@@ -239,10 +239,12 @@
     '#root section[aria-labelledby="subs-title"] h2{min-width:0;overflow-wrap:anywhere;line-height:1.2}' +
     '#root .admin-subs-scroll{width:100%;max-width:100%;overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}' +
     '#root .admin-subs-table{width:1000px!important;min-width:1000px!important;table-layout:fixed!important}' +
-    '#root .admin-subs-table th:first-child,#root .admin-subs-table td:first-child{position:sticky!important;left:0;z-index:2;width:110px!important;min-width:110px!important;max-width:110px!important;box-sizing:border-box;background:#171C2B}' +
+    '#root .admin-subs-table th:first-child,#root .admin-subs-table td:first-child{position:sticky!important;left:0;z-index:2;width:220px!important;min-width:220px!important;max-width:220px!important;box-sizing:border-box;background:#171C2B}' +
     '#root .admin-subs-table th:first-child{z-index:4;white-space:normal;word-break:normal;overflow-wrap:normal}' +
     '#root .admin-subs-table td:first-child input{display:block;width:100%!important;max-width:100%;min-width:0!important;box-sizing:border-box;min-height:44px!important;padding:0 10px!important;font-size:16px!important}' +
-    '@media(max-width:768px){#root .admin-subs-scroll{width:100%!important}#root .admin-subs-table{width:1000px!important;min-width:1000px!important}#root .admin-subs-table th:first-child,#root .admin-subs-table td:first-child{width:110px!important;min-width:110px!important;max-width:110px!important}}' +
+    '#root .admin-subs-images{display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:100%}' +
+    '#root .admin-subs-images input[type="url"]{max-width:100%;box-sizing:border-box}' +
+    '@media(max-width:768px){#root .admin-subs-scroll{width:100%!important}#root .admin-subs-table{width:1000px!important;min-width:1000px!important}#root .admin-subs-table col:first-child{width:110px!important}#root .admin-subs-table col:nth-child(5){width:355px!important}#root .admin-subs-table th:first-child,#root .admin-subs-table td:first-child{width:110px!important;min-width:110px!important;max-width:110px!important}}' +
     '@media(max-width:768px){#root>div>main{padding:16px!important}#root>div>div[style*="max-width:1280px"]{padding:20px 16px!important}}' +
     '</style>';
 
