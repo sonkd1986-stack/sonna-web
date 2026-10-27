@@ -2,7 +2,11 @@
 
     node server.js        # http://localhost:3000
 
-- Không cần `npm install` (Node >= 16).
+- Chạy `npm install` trước lần khởi động đầu tiên (Node >= 16).
+- Các chức năng hiện tại vẫn lưu dữ liệu JSON. API sản phẩm bổ sung sử dụng PostgreSQL qua Express; cấu hình `DATABASE_URL` trong biến môi trường của máy chủ bằng connection string Supabase. Không đưa connection string hoặc mật khẩu database lên Git.
+- Trong Supabase SQL Editor, chạy nội dung `db/schema.sql` để tạo bảng `products`.
+- API kiểm tra kết nối: `GET /api/db-test`. API thêm sản phẩm: `POST /api/products` với JSON `{"title":"Tên sản phẩm","price":99000,"imageUrl":"https://i.ibb.co/abc123/product.jpg"}`. Khi thành công, API trả HTTP 201 và `{ "ok": true, "product": ... }`; URL trang hiển thị sản phẩm là `/products`.
+- Module `db.js` dùng `process.env.DATABASE_URL`, bật SSL cho Supabase với `rejectUnauthorized: false`, và cung cấp hàm `query()`/`testConnection()`.
 - Lần chạy đầu tạo tài khoản admin và in mật khẩu ra console. Tự đặt: xóa `data/admin.json`, rồi
   PowerShell: `$env:ADMIN_PASSWORD="matkhau"` (dòng riêng) rồi `node server.js`; cmd: `set ADMIN_PASSWORD=Son12345@` rồi `node server.js`.
 - Máy chủ dùng `process.env.PORT` do hosting cấp; chạy cục bộ sẽ dùng cổng dự phòng `3000`. Lệnh khởi động chuẩn: `npm start` (`node server.js`).

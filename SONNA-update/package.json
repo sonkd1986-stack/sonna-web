@@ -5,5 +5,10 @@
   "description": "SONNA - cửa hàng + admin, Node.js thuần, dữ liệu JSON",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
   "engines": { "node": ">=16" }
 }

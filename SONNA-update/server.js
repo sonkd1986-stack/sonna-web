@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const productApi = require('./routes/products');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
@@ -1300,5 +1301,11 @@ async function handle(req, res) {
   });
 }
 
-http.createServer(handle).listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log(`[SONNA] Dữ liệu lưu tại: ${DATA}`); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Điền data/payment.json (ngân hàng + khóa SePay) hoặc chạy SIM_TOPUP=0 khi bán thật.');
+http.createServer((req, res) => {
+  const requestPath = new URL(req.url, 'http://localhost').pathname;
+  if (requestPath === '/api/products' || requestPath === '/api/db-test' || requestPath === '/products') {
+    return productApi(req, res);
+  }
+  return handle(req, res);
+}).listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log(`[SONNA] Dữ liệu lưu tại: ${DATA}`); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Điền data/payment.json (ngân hàng + khóa SePay) hoặc chạy SIM_TOPUP=0 khi bán thật.');
   if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem data/payment.json và README.'); });

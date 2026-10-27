@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sản phẩm</title>
+  <style>
+    body { margin: 0; padding: 24px; color: #1b1530; background: #f4f5fa; font-family: system-ui, sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; }
+    .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+    article { overflow: hidden; border: 1px solid #e3e1ec; border-radius: 12px; background: #fff; }
+    article img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #eee; }
+    article h2, article p { margin: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sản phẩm</h1>
+    <section class="products">
+      <% products.forEach((product) => { %>
+        <article>
+          <img
+            src="<%= product.imageUrl %>"
+            alt="<%= product.title %>"
+            loading="lazy"
+            decoding="async"
+          >
+          <h2><%= product.title %></h2>
+          <p><%= product.price %> ₫</p>
+        </article>
+      <% }) %>
+    </section>
+  </main>
+</body>
+</html>
