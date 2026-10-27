@@ -11,7 +11,7 @@ function publicClientConfig() {
   return url && key ? { url, key } : null;
 }
 
-function publishStoreChange() {
+function publishStoreChange(changedKeys) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return Promise.reject(new Error('Supabase Realtime publisher is not configured.'));
@@ -25,7 +25,10 @@ function publishStoreChange() {
     messages: [{
       topic: STORE_TOPIC,
       event: STORE_EVENT,
-      payload: { changedAt: new Date().toISOString() },
+      payload: {
+        changedAt: new Date().toISOString(),
+        changedKeys: Array.isArray(changedKeys) ? changedKeys : []
+      },
       private: false
     }]
   }));

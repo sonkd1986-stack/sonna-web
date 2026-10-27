@@ -60,9 +60,12 @@ function persistBatch(entries) {
         );
       }
       await client.query('COMMIT');
-      if (storeChangeNotifier && entries.some(([key]) =>
-        key === 'store.json' || key === 'accounts.json' || key === 'orders.json')) {
-        Promise.resolve().then(() => storeChangeNotifier()).catch(error => {
+      const changedKeys = Array.from(new Set(entries
+        .map(([key]) => key)
+        .filter(key => key === 'store.json' || key === 'accounts.json' ||
+          key === 'orders.json' || key === 'payment.json')));
+      if (storeChangeNotifier && changedKeys.length) {
+        Promise.resolve().then(() => storeChangeNotifier(changedKeys)).catch(error => {
           console.error('[SONNA] Supabase Realtime notification failed; polling remains available:', error);
         });
       }

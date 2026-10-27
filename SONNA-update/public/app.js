@@ -1,6 +1,6 @@
 (function () {
   var MEM = {}, authed = false, pending = 'Store', cur = 'Store', NAV = [], PAGES = {};
-  var timers = {}, storeWrites = {}, publicStoreSnapshot = null, storeRefreshBusy = false, realtimeRefreshAt = 0;
+  var timers = {}, storeWrites = {}, publicStoreSnapshot = null, liveStateSnapshot = null, adminStoreSnapshot = null, storeRefreshBusy = false, realtimeRefreshAt = 0;
   var realtimeClientLoading = false, realtimeClient = null;
 
   function api(method, url, body) {
@@ -47,6 +47,7 @@
   }
   function hydrateStore(s) {
     publicStoreSnapshot = JSON.stringify(s.store || {});
+    liveStateSnapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup });
     window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup };
     authed = !!s.authed;
     window.SONNA_ADMIN = authed;
@@ -66,6 +67,7 @@
       }
       MEM = Object.assign({}, privateStore.data, s.store || {});
       MEM.acc = privateStore.data.acc;
+      adminStoreSnapshot = JSON.stringify(privateStore.data);
       return true;
     });
   }
@@ -86,22 +88,43 @@
       return null;
     });
   }
-  function refreshPublicStore() {
-    if (cur !== 'Store' || document.hidden || storeRefreshBusy) return Promise.resolve();
+  function refreshLiveState() {
+    if (document.hidden || storeRefreshBusy) return Promise.resolve();
     var now = Date.now();
     if (now - realtimeRefreshAt < 1500) return Promise.resolve();
     realtimeRefreshAt = now;
     storeRefreshBusy = true;
     return api('GET', '/api/session').then(function (s) {
-      if (s._status !== 200) throw new Error('Public store refresh failed (' + s._status + ').');
-      var snapshot = JSON.stringify(s.store || {});
-      if (snapshot === publicStoreSnapshot) return;
-      publicStoreSnapshot = snapshot;
+      if (s._status !== 200) throw new Error('Live state refresh failed (' + s._status + ').');
+      var snapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup });
+      var changed = snapshot !== liveStateSnapshot;
+      window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup };
+      publicStoreSnapshot = JSON.stringify(s.store || {});
+      if (cur.indexOf('Admin') === 0 && s.authed) {
+        return api('GET', '/api/store').then(function (privateStore) {
+          if (privateStore._status !== 200 || !privateStore.data || !privateStore.data.acc) {
+            throw new Error('Admin state refresh failed (' + privateStore._status + ').');
+          }
+          var privateSnapshot = JSON.stringify(privateStore.data);
+          if (privateSnapshot !== adminStoreSnapshot) {
+            MEM = Object.assign({}, privateStore.data, s.store || {});
+            MEM.acc = privateStore.data.acc;
+            adminStoreSnapshot = privateSnapshot;
+            changed = true;
+          }
+          if (changed) liveStateSnapshot = snapshot;
+          return changed;
+        });
+      }
+      if (changed) liveStateSnapshot = snapshot;
+      return changed;
+    }).then(function (changed) {
+      if (!changed) return;
       if (f.contentWindow && typeof f.contentWindow.SONNA_REFRESH === 'function') {
         f.contentWindow.SONNA_REFRESH();
       }
     }).catch(function (error) {
-      console.error('[SONNA] Không thể tự cập nhật cửa hàng:', error);
+      console.error('[SONNA] Không thể tự cập nhật dữ liệu giao diện:', error);
     }).then(function () {
       storeRefreshBusy = false;
     });
@@ -123,7 +146,7 @@
         realtimeClient.channel('sonna:store-updates', {
           config: { broadcast: { self: false }, private: false }
         }).on('broadcast', { event: 'store_changed' }, function () {
-          refreshPublicStore();
+          refreshLiveState();
         }).subscribe(function (status, error) {
           if (status === 'SUBSCRIBED') {
             console.info('[SONNA] Supabase Realtime store updates connected.');
@@ -284,7 +307,7 @@
   });
   window.addEventListener('message', function (e) { if (e.data && e.data.go) go(e.data.go, e.data.hash); });
   window.addEventListener('hashchange', function () { go(location.hash.slice(1), ''); });
-  window.setInterval(refreshPublicStore, 10000);
+  window.setInterval(refreshLiveState, 10000);
 
   Promise.all([
     api('GET', '/api/session'),
