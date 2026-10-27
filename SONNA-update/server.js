@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const https = require('https');
 const productApi = require('./routes/products');
 const cloudState = require('./cloud-state');
+const realtime = require('./realtime');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
@@ -697,6 +698,7 @@ function readRaw(req) {
 }
 function readBody(req) { return readRaw(req).then(t => (t ? JSON.parse(t) : {})); }
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+const SUPABASE_BROWSER_SDK = path.join(ROOT, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 
 // ---------- Router ----------
 async function handle(req, res) {
@@ -710,7 +712,7 @@ async function handle(req, res) {
     try {
       if (p === '/api/session' && req.method === 'GET') {
         const cu = getUser(req);
-        return send(res, 200, { authed: isAuthed(req), nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup() });
+        return send(res, 200, { authed: isAuthed(req), nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), realtime: realtime.publicClientConfig() });
       }
       if (p === '/api/login' && req.method === 'POST') {
         if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
@@ -1299,6 +1301,7 @@ async function handle(req, res) {
 async function startServer() {
   supabaseStorageConfig();
   await cloudState.initialize();
+  cloudState.setStoreChangeNotifier(realtime.publishStoreChange);
   store = readJSON(STORE_FILE, {});
   accountsDb = readJSON(ACCOUNTS_FILE, emptyAccounts());
   usersDb = readJSON(USERS_FILE, { nextId: 28, users: [] });
@@ -1341,6 +1344,20 @@ async function startServer() {
 
   const server = http.createServer((req, res) => {
   const requestPath = new URL(req.url, 'http://localhost').pathname;
+  if (requestPath === '/vendor/supabase.js' && req.method === 'GET') {
+    return fs.readFile(SUPABASE_BROWSER_SDK, (error, contents) => {
+      if (error) {
+        console.error('[SONNA] Could not load Supabase browser SDK:', error);
+        res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('Supabase Realtime client is unavailable.');
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600'
+      });
+      res.end(contents);
+    });
+  }
   if (requestPath === '/api/products' || requestPath === '/api/db-test' || requestPath === '/products') {
     if ((requestPath === '/api/db-test' || (requestPath === '/api/products' && req.method === 'POST')) && !isAuthed(req)) {
       return send(res, 401, { error: 'Cần đăng nhập admin.' });

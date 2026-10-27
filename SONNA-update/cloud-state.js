@@ -12,9 +12,14 @@ const STATE_KEYS = new Set([
 let initialized = false;
 let writes = Promise.resolve();
 let writeError = null;
+let storeChangeNotifier = null;
 
 function keyFor(file) {
   return path.basename(file);
+}
+
+function setStoreChangeNotifier(notifier) {
+  storeChangeNotifier = notifier;
 }
 
 async function initialize() {
@@ -55,6 +60,12 @@ function persistBatch(entries) {
         );
       }
       await client.query('COMMIT');
+      if (storeChangeNotifier && entries.some(([key]) =>
+        key === 'store.json' || key === 'accounts.json' || key === 'orders.json')) {
+        Promise.resolve().then(() => storeChangeNotifier()).catch(error => {
+          console.error('[SONNA] Supabase Realtime notification failed; polling remains available:', error);
+        });
+      }
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       throw error;
@@ -97,4 +108,4 @@ function has(key) {
   return cache.has(key);
 }
 
-module.exports = { initialize, readJSON, writeJSON, writeBatch, flush, has };
+module.exports = { initialize, readJSON, writeJSON, writeBatch, flush, has, setStoreChangeNotifier };

@@ -1,6 +1,7 @@
 (function () {
   var MEM = {}, authed = false, pending = 'Store', cur = 'Store', NAV = [], PAGES = {};
-  var timers = {}, storeWrites = {}, publicStoreSnapshot = null, storeRefreshBusy = false;
+  var timers = {}, storeWrites = {}, publicStoreSnapshot = null, storeRefreshBusy = false, realtimeRefreshAt = 0;
+  var realtimeClientLoading = false, realtimeClient = null;
 
   function api(method, url, body) {
     return fetch(url, {
@@ -84,6 +85,60 @@
       alert('Không lưu được thay đổi lên máy chủ. Hãy kiểm tra kết nối rồi thử lại.');
       return null;
     });
+  }
+  function refreshPublicStore() {
+    if (cur !== 'Store' || document.hidden || storeRefreshBusy) return Promise.resolve();
+    var now = Date.now();
+    if (now - realtimeRefreshAt < 1500) return Promise.resolve();
+    realtimeRefreshAt = now;
+    storeRefreshBusy = true;
+    return api('GET', '/api/session').then(function (s) {
+      if (s._status !== 200) throw new Error('Public store refresh failed (' + s._status + ').');
+      var snapshot = JSON.stringify(s.store || {});
+      if (snapshot === publicStoreSnapshot) return;
+      publicStoreSnapshot = snapshot;
+      if (f.contentWindow && typeof f.contentWindow.SONNA_REFRESH === 'function') {
+        f.contentWindow.SONNA_REFRESH();
+      }
+    }).catch(function (error) {
+      console.error('[SONNA] Không thể tự cập nhật cửa hàng:', error);
+    }).then(function () {
+      storeRefreshBusy = false;
+    });
+  }
+  function setupSupabaseRealtime(config) {
+    if (!config || !config.url || !config.key || realtimeClientLoading || realtimeClient) return;
+    realtimeClientLoading = true;
+    var script = document.createElement('script');
+    script.src = '/vendor/supabase.js';
+    script.onload = function () {
+      try {
+        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+          throw new Error('Supabase browser SDK did not initialize.');
+        }
+        realtimeClient = window.supabase.createClient(config.url, config.key, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          realtime: { params: { eventsPerSecond: 5 } }
+        });
+        realtimeClient.channel('sonna:store-updates', {
+          config: { broadcast: { self: false }, private: false }
+        }).on('broadcast', { event: 'store_changed' }, function () {
+          refreshPublicStore();
+        }).subscribe(function (status, error) {
+          if (status === 'SUBSCRIBED') {
+            console.info('[SONNA] Supabase Realtime store updates connected.');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[SONNA] Supabase Realtime unavailable; polling fallback remains active.', error || status);
+          }
+        });
+      } catch (error) {
+        console.error('[SONNA] Could not initialize Supabase Realtime; polling fallback remains active.', error);
+      }
+    };
+    script.onerror = function () {
+      console.error('[SONNA] Could not load Supabase Realtime client; polling fallback remains active.');
+    };
+    document.head.appendChild(script);
   }
   window.SONNA_STORE = {
     get: function (k, d) { return MEM[k] !== undefined ? MEM[k] : d; },
@@ -225,29 +280,14 @@
   });
   window.addEventListener('message', function (e) { if (e.data && e.data.go) go(e.data.go, e.data.hash); });
   window.addEventListener('hashchange', function () { go(location.hash.slice(1), ''); });
-  window.setInterval(function () {
-    if (cur !== 'Store' || document.hidden || storeRefreshBusy) return;
-    storeRefreshBusy = true;
-    api('GET', '/api/session').then(function (s) {
-      if (s._status !== 200) throw new Error('Public store refresh failed (' + s._status + ').');
-      var snapshot = JSON.stringify(s.store || {});
-      if (snapshot === publicStoreSnapshot) return;
-      publicStoreSnapshot = snapshot;
-      if (f.contentWindow && typeof f.contentWindow.SONNA_REFRESH === 'function') {
-        f.contentWindow.SONNA_REFRESH();
-      }
-    }).catch(function (error) {
-      console.error('[SONNA] Không thể tự cập nhật cửa hàng:', error);
-    }).then(function () {
-      storeRefreshBusy = false;
-    });
-  }, 10000);
+  window.setInterval(refreshPublicStore, 10000);
 
   Promise.all([
     api('GET', '/api/session'),
     fetch('/runtime.js').then(function (r) { return r.text(); })
   ]).then(function (res) {
     var s = res[0]; RUNTIME = res[1]; NAV = s.nav || [];
+    setupSupabaseRealtime(s.realtime);
     buildBar();
     hydrateStore(s).then(function (ok) {
       if (!ok) { pending = location.hash.slice(1) || 'Store'; showLogin(); return; }

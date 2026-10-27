@@ -2,11 +2,11 @@
 
     node server.js        # http://localhost:3000
 
-- Chạy `npm install` trước lần khởi động đầu tiên (Node >= 16).
+- Chạy `npm install` trước lần khởi động đầu tiên (Node >= 22).
 - Dữ liệu vận hành (cấu hình cửa hàng, kho acc, tài khoản admin/khách, đơn hàng, ví, diễn đàn, thanh toán và phiên) được lưu trong bảng riêng `public.sonna_state` trên Supabase PostgreSQL dưới dạng JSONB. Ảnh tải lên được lưu trong bucket `sonna-uploads` trên Supabase Storage. Không cần ổ đĩa bền vững của Render.
-- Cửa hàng đang mở ở trang chủ tự kiểm tra thay đổi và cập nhật giao diện tối đa mỗi 10 giây. Đây là polling qua API của máy chủ, không phải subscription Supabase Realtime; không cần bật publication Realtime cho tính năng này.
+- Cửa hàng dùng Supabase Realtime Broadcast để nhận tín hiệu cập nhật ngay, sau đó tải lại dữ liệu cửa hàng đã lọc từ máy chủ. Broadcast chỉ chứa thời điểm thay đổi, không chứa kho acc, tài khoản, đơn hàng hay dữ liệu nhạy cảm. Polling API mỗi 10 giây vẫn chạy làm phương án dự phòng.
 - Trong Supabase SQL Editor, chạy toàn bộ `db/schema.sql` để tạo/cập nhật bảng sản phẩm, bảng state có RLS và bucket ảnh công khai. Schema không di chuyển dữ liệu JSON đang có; bản này khởi tạo sạch trên Supabase.
-- Cấu hình trong Render → Environment: `DATABASE_URL` (PostgreSQL connection string), `SUPABASE_URL` (Project URL, dạng `https://<project-ref>.supabase.co`), `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API Keys → service_role/secret), `ADMIN_USER` và `ADMIN_PASSWORD`. Khóa service role chỉ dùng server-side, cấp quyền cao và tuyệt đối không đặt trong giao diện trình duyệt, không commit lên Git hoặc chia sẻ. Khởi động lại/deploy sau khi lưu.
+- Cấu hình trong Render → Environment: `DATABASE_URL` (PostgreSQL connection string), `SUPABASE_URL` (Project URL, dạng `https://<project-ref>.supabase.co`), `SUPABASE_ANON_KEY` (publishable/anon key công khai để trình duyệt subscribe Broadcast), `SUPABASE_SERVICE_ROLE_KEY` (secret/service_role, chỉ dùng server-side), `ADMIN_USER` và `ADMIN_PASSWORD`. Chỉ publishable/anon key được gửi tới trình duyệt; tuyệt đối không đưa secret/service_role key vào giao diện, không commit lên Git hoặc chia sẻ. Khởi động lại/deploy sau khi lưu.
 - Bảng `sonna_state` bật RLS và không có policy cho client ẩn danh. Máy chủ truy cập bằng `DATABASE_URL` tin cậy; không công khai chuỗi kết nối.
 - Sau khi deploy và đăng nhập admin, mở mục **Sản phẩm** trên thanh quản trị để thêm tên, giá và ảnh. Dùng **Tải file ảnh lên Supabase** để lưu bản ảnh vào bucket; nếu chỉ dán URL imgbb thì PostgreSQL lưu URL, còn ảnh vẫn do imgbb lưu. API `POST /api/products` yêu cầu phiên đăng nhập admin. Danh sách sản phẩm hiển thị ở `/products`; dữ liệu này chưa tự đồng bộ vào catalog của cửa hàng cũ.
 - API kiểm tra kết nối: `GET /api/db-test` (yêu cầu phiên admin). API liệt kê sản phẩm: `GET /api/products`. Khi thêm thành công, API trả HTTP 201 và `{ "ok": true, "product": ... }`.
