@@ -2,7 +2,7 @@
   "name": "sonna",
   "version": "1.0.0",
   "private": true,
-  "description": "SONNA - cửa hàng + admin, Node.js thuần, dữ liệu JSON",
+  "description": "SONNA - cửa hàng + admin, dữ liệu JSON và API sản phẩm PostgreSQL",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
   "dependencies": {

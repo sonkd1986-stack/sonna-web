@@ -29,9 +29,9 @@ function parseProduct(body) {
 
   try {
     const url = new URL(imageUrl);
-    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid protocol.');
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid image URL.');
   } catch {
-    return { error: 'imageUrl phải là URL HTTP hoặc HTTPS hợp lệ.' };
+    return { error: 'imageUrl phải là URL HTTPS trực tiếp hợp lệ.' };
   }
 
   return { product: { title, price, imageUrl } };
@@ -44,6 +44,20 @@ app.get('/api/db-test', async (req, res) => {
   } catch (error) {
     console.error('[SONNA] PostgreSQL connection test failed:', error);
     return res.status(503).json({ ok: false, error: 'Không thể kết nối PostgreSQL.' });
+  }
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, title, price, image_url AS "imageUrl", created_at AS "createdAt"
+       FROM products
+       ORDER BY created_at DESC`
+    );
+    return res.json({ ok: true, products: result.rows });
+  } catch (error) {
+    console.error('[SONNA] Product list query failed:', error);
+    return res.status(503).json({ error: 'Không thể tải danh sách sản phẩm.' });
   }
 });
 

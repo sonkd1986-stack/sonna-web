@@ -1304,6 +1304,9 @@ async function handle(req, res) {
 http.createServer((req, res) => {
   const requestPath = new URL(req.url, 'http://localhost').pathname;
   if (requestPath === '/api/products' || requestPath === '/api/db-test' || requestPath === '/products') {
+    if ((requestPath === '/api/db-test' || (requestPath === '/api/products' && req.method === 'POST')) && !isAuthed(req)) {
+      return send(res, 401, { error: 'Cần đăng nhập admin.' });
+    }
     return productApi(req, res);
   }
   return handle(req, res);
