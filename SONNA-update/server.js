@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
+const axios = require('axios');
 const productApi = require('./routes/products');
 const cloudState = require('./cloud-state');
 const realtime = require('./realtime');
@@ -186,7 +187,7 @@ const payCfg = () => {
 };
 const payReady = () => { const c = payCfg(); return !!(c.accountNumber && c.bankShortName && (c.sepay && (c.sepay.apiKey || c.sepay.hmacSecret))); };
 function gachTheCfg() {
-  const apiUrl = String(process.env.GACHTHE_API_URL || '').trim();
+  const apiUrl = String(process.env.GACHTHE_API_URL || 'https://gachthe.vn/chargingws/v2').trim();
   let endpoint = null;
   try {
     const parsed = new URL(apiUrl);
@@ -194,7 +195,7 @@ function gachTheCfg() {
   } catch (error) {}
   return {
     endpoint,
-    partnerId: String(process.env.GACHTHE_PARTNER_ID || '').trim(),
+    partnerId: String(process.env.GACHTHE_PARTNER_ID || '66250095675').trim(),
     partnerKey: String(process.env.GACHTHE_PARTNER_KEY || '').trim()
   };
 }
@@ -347,15 +348,18 @@ function sameHex(left, right) {
 async function callGachThe(fields) {
   const cfg = gachTheCfg();
   if (!gachTheReady()) throw new Error('Gạch Thẻ API chưa được cấu hình HTTPS.');
-  const response = await fetch(cfg.endpoint, {
-    method: 'POST',
+  const response = await axios.post(cfg.endpoint.toString(), new URLSearchParams(fields), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(fields),
-    redirect: 'error',
-    signal: AbortSignal.timeout(12000)
+    timeout: 12000,
+    maxRedirects: 0,
+    maxContentLength: 20000,
+    responseType: 'text',
+    transformResponse: [data => data]
   });
-  const text = await response.text();
-  if (!response.ok || text.length > 20000) throw new Error(`Gạch Thẻ API HTTP ${response.status}.`);
+  const text = response.data;
+  if (typeof text !== 'string' || text.length > 20000) {
+    throw new Error('Gạch Thẻ API trả về phản hồi quá lớn hoặc không hợp lệ.');
+  }
   let payload;
   try { payload = JSON.parse(text); }
   catch (error) { throw new Error('Gạch Thẻ API trả về JSON không hợp lệ.'); }
@@ -872,6 +876,22 @@ async function handle(req, res) {
   const p = url.pathname;
   const ip = req.socket.remoteAddress;
 
+  if (['/chargingws/v2', '/api/chargingws/v2', '/api/webhook/gachthe'].includes(p) && req.method === 'POST') {
+    try {
+      if (!gachTheReady()) return send(res, 503, { success: false });
+      const payload = await readBody(req);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return send(res, 400, { success: false });
+      }
+      const result = await handleGachTheCallback(payload);
+      return send(res, result.status, result.body);
+    } catch (error) {
+      if (error instanceof SyntaxError) return send(res, 400, { success: false });
+      console.error('[SONNA] Gạch Thẻ callback failed:', error);
+      return send(res, 500, { success: false });
+    }
+  }
+
   if (p.startsWith('/api/')) {
     try {
       if (p === '/api/session' && req.method === 'GET') {
@@ -905,12 +925,6 @@ async function handle(req, res) {
         let payload; try { payload = JSON.parse(raw); } catch (e) { return send(res, 400, { success: false }); }
         const result = handleSepay(payload);
         return send(res, 200, Object.assign({ success: true }, result));
-      }
-      if (p === '/api/webhook/gachthe' && req.method === 'POST') {
-        if (!gachTheReady()) return send(res, 503, { success: false });
-        const payload = await readBody(req);
-        const result = await handleGachTheCallback(payload);
-        return send(res, result.status, result.body);
       }
       if (p === '/api/admin/deposits' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
