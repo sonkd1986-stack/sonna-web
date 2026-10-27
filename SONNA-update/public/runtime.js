@@ -58,5 +58,6 @@ var C=new Function('DCLogic',P.script+';return Component;')(DCLogic);
 inst=new C();inst.state=inst.state||{};inst.props=Object.assign({},P.props);
 rerender();
 if(inst.mount)inst.mount();
+window.SONNA_REFRESH=function(){schedule();};
 if(P.hash&&P.hash.length>1){var t=document.getElementById(P.hash.slice(1));if(t)t.scrollIntoView();}
 })();

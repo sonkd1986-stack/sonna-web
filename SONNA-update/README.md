@@ -4,6 +4,7 @@
 
 - Chạy `npm install` trước lần khởi động đầu tiên (Node >= 16).
 - Dữ liệu vận hành (cấu hình cửa hàng, kho acc, tài khoản admin/khách, đơn hàng, ví, diễn đàn, thanh toán và phiên) được lưu trong bảng riêng `public.sonna_state` trên Supabase PostgreSQL dưới dạng JSONB. Ảnh tải lên được lưu trong bucket `sonna-uploads` trên Supabase Storage. Không cần ổ đĩa bền vững của Render.
+- Cửa hàng đang mở ở trang chủ tự kiểm tra thay đổi và cập nhật giao diện tối đa mỗi 10 giây. Đây là polling qua API của máy chủ, không phải subscription Supabase Realtime; không cần bật publication Realtime cho tính năng này.
 - Trong Supabase SQL Editor, chạy toàn bộ `db/schema.sql` để tạo/cập nhật bảng sản phẩm, bảng state có RLS và bucket ảnh công khai. Schema không di chuyển dữ liệu JSON đang có; bản này khởi tạo sạch trên Supabase.
 - Cấu hình trong Render → Environment: `DATABASE_URL` (PostgreSQL connection string), `SUPABASE_URL` (Project URL, dạng `https://<project-ref>.supabase.co`), `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API Keys → service_role/secret), `ADMIN_USER` và `ADMIN_PASSWORD`. Khóa service role chỉ dùng server-side, cấp quyền cao và tuyệt đối không đặt trong giao diện trình duyệt, không commit lên Git hoặc chia sẻ. Khởi động lại/deploy sau khi lưu.
 - Bảng `sonna_state` bật RLS và không có policy cho client ẩn danh. Máy chủ truy cập bằng `DATABASE_URL` tin cậy; không công khai chuỗi kết nối.

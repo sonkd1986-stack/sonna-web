@@ -1,6 +1,6 @@
 (function () {
   var MEM = {}, authed = false, pending = 'Store', cur = 'Store', NAV = [], PAGES = {};
-  var timers = {}, storeWrites = {};
+  var timers = {}, storeWrites = {}, publicStoreSnapshot = null, storeRefreshBusy = false;
 
   function api(method, url, body) {
     return fetch(url, {
@@ -45,6 +45,7 @@
     });
   }
   function hydrateStore(s) {
+    publicStoreSnapshot = JSON.stringify(s.store || {});
     window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup };
     authed = !!s.authed;
     window.SONNA_ADMIN = authed;
@@ -180,6 +181,10 @@
     '#root .sonna-scrollbox::-webkit-scrollbar-track{background:#1F2538;border-radius:8px}' +
     '#root .sonna-scrollbox::-webkit-scrollbar-thumb{background:#FF8A1F;border:2px solid #1F2538;border-radius:8px}' +
     '#root .sonna-scrollbox::-webkit-scrollbar-thumb:hover{background:#FFC24B}' +
+    '#root section[aria-labelledby="subs-title"] h2{min-width:0;overflow-wrap:anywhere;line-height:1.2}' +
+    '#root section[aria-labelledby="subs-title"]>div[style*="max-height:520px"]{width:100%;max-width:100%;overflow-x:auto!important;overflow-y:auto!important}' +
+    '#root section[aria-labelledby="subs-title"] th:first-child,#root section[aria-labelledby="subs-title"] td:first-child{position:sticky!important;left:0;z-index:2;min-width:170px;background:#171C2B}' +
+    '#root section[aria-labelledby="subs-title"] th:first-child{z-index:4}' +
     '@media(max-width:768px){#root>div>main{padding:16px!important}#root>div>div[style*="max-width:1280px"]{padding:20px 16px!important}}' +
     '</style>';
 
@@ -219,6 +224,23 @@
   });
   window.addEventListener('message', function (e) { if (e.data && e.data.go) go(e.data.go, e.data.hash); });
   window.addEventListener('hashchange', function () { go(location.hash.slice(1), ''); });
+  window.setInterval(function () {
+    if (cur !== 'Store' || document.hidden || storeRefreshBusy) return;
+    storeRefreshBusy = true;
+    api('GET', '/api/session').then(function (s) {
+      if (s._status !== 200) throw new Error('Public store refresh failed (' + s._status + ').');
+      var snapshot = JSON.stringify(s.store || {});
+      if (snapshot === publicStoreSnapshot) return;
+      publicStoreSnapshot = snapshot;
+      if (f.contentWindow && typeof f.contentWindow.SONNA_REFRESH === 'function') {
+        f.contentWindow.SONNA_REFRESH();
+      }
+    }).catch(function (error) {
+      console.error('[SONNA] Không thể tự cập nhật cửa hàng:', error);
+    }).then(function () {
+      storeRefreshBusy = false;
+    });
+  }, 10000);
 
   Promise.all([
     api('GET', '/api/session'),
