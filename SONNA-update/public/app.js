@@ -47,8 +47,8 @@
   }
   function hydrateStore(s) {
     publicStoreSnapshot = JSON.stringify(s.store || {});
-    liveStateSnapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup });
-    window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup };
+    liveStateSnapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup, cardTopupReady: !!s.cardTopupReady });
+    window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup, cardTopupReady: !!s.cardTopupReady };
     authed = !!s.authed;
     window.SONNA_ADMIN = authed;
     if (bar) bar.style.display = authed ? 'flex' : 'none';
@@ -96,9 +96,9 @@
     storeRefreshBusy = true;
     return api('GET', '/api/session').then(function (s) {
       if (s._status !== 200) throw new Error('Live state refresh failed (' + s._status + ').');
-      var snapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup });
+      var snapshot = JSON.stringify({ store: s.store || {}, payment: s.payment || {}, simTopup: !!s.simTopup, cardTopupReady: !!s.cardTopupReady });
       var changed = snapshot !== liveStateSnapshot;
-      window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup };
+      window.SONNA_CONFIG = { payment: s.payment || {}, simTopup: !!s.simTopup, cardTopupReady: !!s.cardTopupReady };
       publicStoreSnapshot = JSON.stringify(s.store || {});
       if (cur.indexOf('Admin') === 0 && s.authed) {
         return api('GET', '/api/store').then(function (privateStore) {

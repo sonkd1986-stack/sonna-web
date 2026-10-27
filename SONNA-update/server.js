@@ -185,6 +185,27 @@ const payCfg = () => {
   });
 };
 const payReady = () => { const c = payCfg(); return !!(c.accountNumber && c.bankShortName && (c.sepay && (c.sepay.apiKey || c.sepay.hmacSecret))); };
+function gachTheCfg() {
+  const apiUrl = String(process.env.GACHTHE_API_URL || '').trim();
+  let endpoint = null;
+  try {
+    const parsed = new URL(apiUrl);
+    if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) endpoint = parsed;
+  } catch (error) {}
+  return {
+    endpoint,
+    partnerId: String(process.env.GACHTHE_PARTNER_ID || '').trim(),
+    partnerKey: String(process.env.GACHTHE_PARTNER_KEY || '').trim()
+  };
+}
+const gachTheReady = () => {
+  const cfg = gachTheCfg();
+  return !!(cfg.endpoint && cfg.partnerId && cfg.partnerKey);
+};
+const GACHTHE_DISCOUNT_PERCENT = 15;
+function gachTheWalletCredit(faceValue) {
+  return Math.floor(faceValue * (100 - GACHTHE_DISCOUNT_PERCENT) / 100);
+}
 // Chỉ bật nạp giả lập khi được yêu cầu rõ ràng; mặc định an toàn cho triển khai thật.
 const simTopup = () => process.env.SIM_TOPUP === '1' && !payReady();
 function publicPayment() {
@@ -312,6 +333,149 @@ function publicStore() {
 }
 let deposits = readJSON(DEPOSITS_FILE, []);
 const depositIds = new Set(deposits.map(d => String(d.txId)));
+const cardTopupAttempts = new Map();
+function cardFingerprint(code, serial, telco, partnerKey) {
+  return crypto.createHmac('sha256', partnerKey)
+    .update([telco, code, serial].join(':'))
+    .digest('hex');
+}
+function sameHex(left, right) {
+  const a = Buffer.from(String(left || '').toLowerCase());
+  const b = Buffer.from(String(right || '').toLowerCase());
+  return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
+async function callGachThe(fields) {
+  const cfg = gachTheCfg();
+  if (!gachTheReady()) throw new Error('Gạch Thẻ API chưa được cấu hình HTTPS.');
+  const response = await fetch(cfg.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields),
+    redirect: 'error',
+    signal: AbortSignal.timeout(12000)
+  });
+  const text = await response.text();
+  if (!response.ok || text.length > 20000) throw new Error(`Gạch Thẻ API HTTP ${response.status}.`);
+  let payload;
+  try { payload = JSON.parse(text); }
+  catch (error) { throw new Error('Gạch Thẻ API trả về JSON không hợp lệ.'); }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Gạch Thẻ API trả về dữ liệu không hợp lệ.');
+  }
+  return payload;
+}
+function gachTheSign(code, serial, partnerKey) {
+  return crypto.createHash('md5').update(partnerKey + code + serial).digest('hex');
+}
+async function checkGachTheCard(txn, telco, code, serial) {
+  const cfg = gachTheCfg();
+  const result = await callGachThe({
+    telco, code, serial, amount: String(txn.declaredValue),
+    request_id: txn.requestId, partner_id: cfg.partnerId,
+    sign: gachTheSign(code, serial, cfg.partnerKey), command: 'check'
+  });
+  return result;
+}
+function updateGachTheDeposit(txId, update) {
+  const index = deposits.findIndex(deposit => deposit.txId === txId);
+  if (index < 0) return null;
+  const nextDeposits = deposits.slice();
+  nextDeposits[index] = { ...nextDeposits[index], ...update };
+  commitState({ [DEPOSITS_FILE]: nextDeposits });
+  deposits = nextDeposits;
+  return deposits[index];
+}
+async function handleGachTheCallback(payload) {
+  const cfg = gachTheCfg();
+  const requestId = String(payload.request_id || '');
+  const code = String(payload.code || '');
+  const serial = String(payload.serial || '');
+  const telco = String(payload.telco || '').toUpperCase();
+  if (!/^[a-f0-9]{32}$/.test(requestId) || !/^\d{6,32}$/.test(code) || !/^\d{6,32}$/.test(serial)) {
+    return { status: 400, body: { success: false } };
+  }
+  const signature = gachTheSign(code, serial, cfg.partnerKey);
+  if (!sameHex(signature, payload.callback_sign)) return { status: 401, body: { success: false } };
+  const txId = 'gachthe:' + requestId;
+  const txn = deposits.find(deposit => deposit.txId === txId && deposit.type === 'gachthe');
+  if (!txn) return { status: 404, body: { success: false } };
+  const fingerprint = cardFingerprint(code, serial, telco, cfg.partnerKey);
+  if (!sameHex(fingerprint, txn.cardFingerprint)) return { status: 401, body: { success: false } };
+  if (txn.status === 'credited' || txn.status === 'failed') {
+    return { status: 200, body: { success: true, duplicate: true } };
+  }
+  const checked = await checkGachTheCard(txn, telco, code, serial);
+  const checkedStatus = Number(checked.status);
+  if (checkedStatus === 99) return { status: 503, body: { success: false, pending: true } };
+  const checkedRequestId = String(checked.request_id || '');
+  const checkedCode = String(checked.code || '');
+  const checkedSerial = String(checked.serial || '');
+  const checkedTelco = String(checked.telco || '').toUpperCase();
+  const declaredValue = Number(checked.declared_value);
+  if (checkedRequestId !== requestId
+      || checkedCode !== code
+      || checkedSerial !== serial
+      || checkedTelco !== telco
+      || declaredValue !== txn.declaredValue) {
+    updateGachTheDeposit(txId, {
+      status: 'review', providerStatus: checkedStatus || null,
+      providerMessage: 'Kết quả truy vấn không khớp với yêu cầu.',
+      updatedAt: new Date().toISOString()
+    });
+    console.error('[SONNA] Gạch Thẻ check identity mismatch for request:', requestId);
+    return { status: 200, body: { success: true, credited: false, review: true } };
+  }
+  if ([2, 3, 4, 100].includes(checkedStatus)) {
+    updateGachTheDeposit(txId, {
+      status: 'failed', providerStatus: checkedStatus,
+      providerMessage: String(checked.message || '').slice(0, 160),
+      updatedAt: new Date().toISOString()
+    });
+    return { status: 200, body: { success: true, credited: false } };
+  }
+  const checkedAmount = Number(checked.amount);
+  if (checkedStatus !== 1
+      || !Number.isSafeInteger(checkedAmount) || checkedAmount < 1 || checkedAmount > txn.declaredValue) {
+    updateGachTheDeposit(txId, {
+      status: 'review', providerStatus: checkedStatus || null,
+      providerMessage: 'Kết quả truy vấn không xác nhận được số tiền.',
+      updatedAt: new Date().toISOString()
+    });
+    console.error('[SONNA] Gạch Thẻ check amount mismatch for request:', requestId);
+    return { status: 200, body: { success: true, credited: false, review: true } };
+  }
+
+  const user = usersDb.users.find(entry => entry.id === txn.userId && !entry.locked);
+  const walletCredit = gachTheWalletCredit(txn.declaredValue);
+  if (!user) {
+    updateGachTheDeposit(txId, {
+      status: 'unmatched', providerStatus: 1, amount: walletCredit,
+      providerAmount: checkedAmount, discountPercent: GACHTHE_DISCOUNT_PERCENT,
+      providerTransactionId: String(checked.trans_id || payload.trans_id || ''),
+      updatedAt: new Date().toISOString()
+    });
+    return { status: 200, body: { success: true, credited: false } };
+  }
+  const nextUsers = JSON.parse(JSON.stringify(usersDb));
+  const nextUser = nextUsers.users.find(entry => entry.id === txn.userId);
+  const nextDeposits = deposits.slice();
+  const index = nextDeposits.findIndex(deposit => deposit.txId === txId);
+  if (index < 0 || nextDeposits[index].status !== 'pending') {
+    return { status: 200, body: { success: true, duplicate: true } };
+  }
+  const updated = {
+    ...nextDeposits[index], status: 'credited', providerStatus: 1,
+    amount: walletCredit, providerAmount: checkedAmount,
+    discountPercent: GACHTHE_DISCOUNT_PERCENT, bonus: 0, time: new Date().toISOString(),
+    providerTransactionId: String(checked.trans_id || payload.trans_id || '')
+  };
+  nextUser.wallet += walletCredit;
+  nextDeposits[index] = updated;
+  commitState({ [USERS_FILE]: nextUsers, [DEPOSITS_FILE]: nextDeposits });
+  usersDb = nextUsers;
+  deposits = nextDeposits;
+  return { status: 200, body: { success: true, credited: true } };
+}
 function verifySepay(req, raw) {
   const c = payCfg().sepay || {};
   let ok = false;
@@ -712,7 +876,7 @@ async function handle(req, res) {
     try {
       if (p === '/api/session' && req.method === 'GET') {
         const cu = getUser(req);
-        return send(res, 200, { authed: isAuthed(req), nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), realtime: realtime.publicClientConfig() });
+        return send(res, 200, { authed: isAuthed(req), nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), cardTopupReady: gachTheReady(), realtime: realtime.publicClientConfig() });
       }
       if (p === '/api/login' && req.method === 'POST') {
         if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
@@ -741,6 +905,12 @@ async function handle(req, res) {
         let payload; try { payload = JSON.parse(raw); } catch (e) { return send(res, 400, { success: false }); }
         const result = handleSepay(payload);
         return send(res, 200, Object.assign({ success: true }, result));
+      }
+      if (p === '/api/webhook/gachthe' && req.method === 'POST') {
+        if (!gachTheReady()) return send(res, 503, { success: false });
+        const payload = await readBody(req);
+        const result = await handleGachTheCallback(payload);
+        return send(res, result.status, result.body);
       }
       if (p === '/api/admin/deposits' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
@@ -1044,6 +1214,114 @@ async function handle(req, res) {
         const { status, ...rest } = r;
         return send(res, status, rest);
       }
+      if (p === '/api/wallet/card-topup' && req.method === 'POST') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Cần đăng nhập thành viên.' });
+        if (!gachTheReady()) return send(res, 503, { error: 'Nạp thẻ chưa được cấu hình.' });
+        const body = await readBody(req);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return send(res, 400, { error: 'Dữ liệu thẻ không hợp lệ.' });
+        const activeTopup = deposits.slice().reverse().find(deposit =>
+          deposit.type === 'gachthe' && deposit.userId === user.id && deposit.status === 'pending');
+        if (activeTopup) {
+          return send(res, 409, {
+            error: 'Bạn đang có giao dịch thẻ chờ xử lý. Hãy đợi giao dịch này hoàn tất.',
+            requestId: activeTopup.requestId
+          });
+        }
+        const telcoMap = { VIETTEL: 'VIETTEL', MOBIFONE: 'MOBIFONE', VINAPHONE: 'VINAPHONE' };
+        const telco = telcoMap[String(body.telco || '').trim().toUpperCase()];
+        const code = String(body.code || '').trim();
+        const serial = String(body.serial || '').trim();
+        const declaredValue = Number(body.amount);
+        if (!telco || !/^\d{6,32}$/.test(code) || !/^\d{6,32}$/.test(serial)
+            || ![20000, 50000, 100000, 200000, 500000].includes(declaredValue)) {
+          return send(res, 400, { error: 'Kiểm tra lại nhà mạng, mệnh giá, mã thẻ và serial.' });
+        }
+        const cfg = gachTheCfg();
+        const fingerprint = cardFingerprint(code, serial, telco, cfg.partnerKey);
+        if (deposits.some(deposit => deposit.type === 'gachthe' && sameHex(deposit.cardFingerprint, fingerprint))) {
+          return send(res, 409, { error: 'Thẻ này đã được gửi trước đó. Không gửi lại thẻ.' });
+        }
+        const now = Date.now();
+        const lastAttempt = cardTopupAttempts.get(user.id) || 0;
+        if (now - lastAttempt < 15000) return send(res, 429, { error: 'Vui lòng đợi 15 giây trước khi gửi thẻ tiếp theo.' });
+        cardTopupAttempts.set(user.id, now);
+        if (cardTopupAttempts.size > 1000) {
+          cardTopupAttempts.forEach((time, id) => { if (now - time > 60 * 60 * 1000) cardTopupAttempts.delete(id); });
+        }
+        const requestId = crypto.randomBytes(16).toString('hex');
+        const txn = {
+          txId: 'gachthe:' + requestId, type: 'gachthe', requestId,
+          cardFingerprint: fingerprint, userId: user.id, username: user.username,
+          declaredValue, amount: 0, bonus: 0, status: 'pending',
+          providerStatus: 99, time: new Date().toISOString()
+        };
+        const nextDeposits = deposits.concat(txn);
+        commitState({ [DEPOSITS_FILE]: nextDeposits });
+        deposits = nextDeposits;
+        try {
+          await cloudState.flush();
+        } catch (error) {
+          deposits = deposits.filter(deposit => deposit.txId !== txn.txId);
+          console.error('[SONNA] Could not persist Gạch Thẻ request before submission:', error);
+          return send(res, 503, { error: 'Chưa thể lưu yêu cầu. Thẻ chưa được gửi; vui lòng thử lại sau.' });
+        }
+        try {
+          const providerResult = await callGachThe({
+            telco, code, serial, amount: String(declaredValue), request_id: requestId,
+            partner_id: cfg.partnerId, sign: gachTheSign(code, serial, cfg.partnerKey),
+            command: 'charging'
+          });
+          const providerStatus = Number(providerResult.status);
+          if (![1, 99].includes(providerStatus)) {
+            updateGachTheDeposit(txn.txId, {
+              status: 'failed', providerStatus,
+              providerMessage: String(providerResult.message || '').slice(0, 160),
+              updatedAt: new Date().toISOString()
+            });
+            return send(res, 400, { error: 'Nhà cung cấp không nhận được thẻ. Kiểm tra trạng thái trước khi thử lại.', requestId });
+          }
+          if (providerStatus === 1) {
+            await handleGachTheCallback({
+              request_id: requestId, code, serial, telco, callback_sign: gachTheSign(code, serial, cfg.partnerKey)
+            });
+          }
+          return send(res, 202, {
+            ok: true, requestId,
+            status: 'pending',
+            message: 'Thẻ đang được kiểm tra. Không gửi lại cùng thẻ khi giao dịch đang xử lý.'
+          });
+        } catch (error) {
+          console.error('[SONNA] Gạch Thẻ request outcome is unknown; awaiting provider callback:', requestId, error.message);
+          return send(res, 202, {
+            ok: true, requestId, status: 'pending',
+            message: 'Chưa nhận được phản hồi cuối. Hãy chờ cập nhật, không gửi lại cùng thẻ.'
+          });
+        }
+      }
+      if (p === '/api/wallet/card-topup/pending' && req.method === 'GET') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Cần đăng nhập thành viên.' });
+        const deposit = deposits.slice().reverse().find(entry =>
+          entry.type === 'gachthe' && entry.userId === user.id && entry.status === 'pending');
+        return send(res, 200, { requestId: deposit ? deposit.requestId : '' });
+      }
+      let cardTopupMatch;
+      if ((cardTopupMatch = /^\/api\/wallet\/card-topup\/([a-f0-9]{32})$/.exec(p)) && req.method === 'GET') {
+        const user = getUser(req);
+        if (!user) return send(res, 401, { error: 'Cần đăng nhập thành viên.' });
+        const deposit = deposits.find(entry =>
+          entry.type === 'gachthe' && entry.requestId === cardTopupMatch[1] && entry.userId === user.id);
+        if (!deposit) return send(res, 404, { error: 'Không tìm thấy giao dịch.' });
+        return send(res, 200, {
+          requestId: deposit.requestId, status: deposit.status,
+          amount: Number(deposit.amount) || 0,
+          message: deposit.status === 'credited' ? 'Thẻ hợp lệ, tiền đã cộng vào ví.'
+            : (deposit.status === 'pending' ? 'Đang chờ nhà cung cấp xác nhận.'
+              : (deposit.status === 'review' || deposit.status === 'unmatched'
+                ? 'Giao dịch cần admin kiểm tra.' : 'Thẻ không được chấp nhận.'))
+        });
+      }
       if (p === '/api/wallet/topup' && req.method === 'POST') {
         const u = getUser(req);
         if (!u) return send(res, 401, { error: 'Cần đăng nhập.' });
@@ -1067,7 +1345,7 @@ async function handle(req, res) {
           const depositsList = deposits.filter(d => d.userId === u.id && d.status === 'credited');
           const walletHistory = Array.isArray(u.walletHistory) ? u.walletHistory : [];
           const recent = userOrdersList.map(o => ({ text: 'Mua hàng: ' + o.code, time: o.time, amount: '-' + money(Number(o.total) || 0), col: '#FF6B7A', createdAt: o.createdAt || '' }))
-            .concat(depositsList.map(d => ({ text: 'Nạp ví qua chuyển khoản', time: d.time, amount: '+' + money((Number(d.amount) || 0) + (Number(d.bonus) || 0)), col: '#43D9A0', createdAt: d.time || '' })))
+            .concat(depositsList.map(d => ({ text: d.type === 'gachthe' ? 'Nạp ví qua thẻ cào' : 'Nạp ví qua chuyển khoản', time: d.time, amount: '+' + money((Number(d.amount) || 0) + (Number(d.bonus) || 0)), col: '#43D9A0', createdAt: d.time || '' })))
             .concat(walletHistory.map(entry => ({ text: 'Điều chỉnh ví: ' + entry.reason, time: fmtTime(new Date(entry.createdAt || 0)), amount: (Number(entry.amount) < 0 ? '-' : '+') + money(Math.abs(Number(entry.amount) || 0)), col: Number(entry.amount) < 0 ? '#FF6B7A' : '#43D9A0', createdAt: entry.createdAt || '' })))
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 10)
             .map(({ createdAt, ...entry }) => entry);
@@ -1079,7 +1357,7 @@ async function handle(req, res) {
           }))
             .concat(depositsList.map(d => ({
               id: String(d.id || d.reference || d.time || 'deposit'),
-              type: 'deposit', time: d.time || '', sortAt: d.time || '', title: 'Nạp ví qua chuyển khoản',
+              type: 'deposit', time: d.time || '', sortAt: d.time || '', title: d.type === 'gachthe' ? 'Nạp ví qua thẻ cào' : 'Nạp ví qua chuyển khoản',
               amount: (Number(d.amount) || 0) + (Number(d.bonus) || 0),
               status: 'Đã cộng ví', accounts: []
             })))
