@@ -1,48 +1,46 @@
-# SONNA (Node.js + JSON)
+# SONNA (Node.js + Supabase)
 
     node server.js        # http://localhost:3000
 
 - Chạy `npm install` trước lần khởi động đầu tiên (Node >= 16).
-- Các chức năng hiện tại vẫn lưu dữ liệu JSON. API sản phẩm bổ sung sử dụng PostgreSQL qua Express; cấu hình `DATABASE_URL` trong biến môi trường của máy chủ bằng connection string Supabase. Không đưa connection string hoặc mật khẩu database lên Git.
-- Trong Supabase SQL Editor, chạy nội dung `db/schema.sql` để tạo/cập nhật bảng `products`, thêm kiểm tra dữ liệu, index và bật RLS. Script có thể chạy lại an toàn; nếu bảng cũ đã có dữ liệu vi phạm ràng buộc mới, Supabase sẽ báo lỗi và cần sửa các hàng đó trước. Kết nối server-side `pg` bằng `DATABASE_URL` thường dùng role chủ sở hữu/bypass RLS; RLS không thay thế xác thực cho API `POST /api/products`.
-- Sau khi deploy và đăng nhập admin, mở mục **Sản phẩm** trên thanh quản trị để thêm tên, giá và URL ảnh HTTPS. Dùng link ảnh trực tiếp từ nhà cung cấp (trên imgbb chọn “Direct link”), không dùng link trang chia sẻ. Form có xem trước ảnh; ảnh hỏng thường do URL không trực tiếp, hết hạn hoặc nhà cung cấp chặn hotlink. API `POST /api/products` yêu cầu phiên đăng nhập admin. Danh sách sản phẩm hiển thị ở `/products`; dữ liệu này chưa tự đồng bộ vào catalog JSON của cửa hàng cũ.
+- Dữ liệu vận hành (cấu hình cửa hàng, kho acc, tài khoản admin/khách, đơn hàng, ví, diễn đàn, thanh toán và phiên) được lưu trong bảng riêng `public.sonna_state` trên Supabase PostgreSQL dưới dạng JSONB. Ảnh tải lên được lưu trong bucket `sonna-uploads` trên Supabase Storage. Không cần ổ đĩa bền vững của Render.
+- Trong Supabase SQL Editor, chạy toàn bộ `db/schema.sql` để tạo/cập nhật bảng sản phẩm, bảng state có RLS và bucket ảnh công khai. Schema không di chuyển dữ liệu JSON đang có; bản này khởi tạo sạch trên Supabase.
+- Cấu hình trong Render → Environment: `DATABASE_URL` (PostgreSQL connection string), `SUPABASE_URL` (Project URL, dạng `https://<project-ref>.supabase.co`), `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API Keys → service_role/secret), `ADMIN_USER` và `ADMIN_PASSWORD`. Khóa service role chỉ dùng server-side, cấp quyền cao và tuyệt đối không đặt trong giao diện trình duyệt, không commit lên Git hoặc chia sẻ. Khởi động lại/deploy sau khi lưu.
+- Bảng `sonna_state` bật RLS và không có policy cho client ẩn danh. Máy chủ truy cập bằng `DATABASE_URL` tin cậy; không công khai chuỗi kết nối.
+- Sau khi deploy và đăng nhập admin, mở mục **Sản phẩm** trên thanh quản trị để thêm tên, giá và ảnh. Dùng **Tải file ảnh lên Supabase** để lưu bản ảnh vào bucket; nếu chỉ dán URL imgbb thì PostgreSQL lưu URL, còn ảnh vẫn do imgbb lưu. API `POST /api/products` yêu cầu phiên đăng nhập admin. Danh sách sản phẩm hiển thị ở `/products`; dữ liệu này chưa tự đồng bộ vào catalog của cửa hàng cũ.
 - API kiểm tra kết nối: `GET /api/db-test` (yêu cầu phiên admin). API liệt kê sản phẩm: `GET /api/products`. Khi thêm thành công, API trả HTTP 201 và `{ "ok": true, "product": ... }`.
 - Module `db.js` dùng `process.env.DATABASE_URL`, bật SSL cho Supabase với `rejectUnauthorized: false`, và cung cấp hàm `query()`/`testConnection()`.
-- Lần chạy đầu tạo tài khoản admin và in mật khẩu ra console. Tự đặt: xóa `data/admin.json`, rồi
-  PowerShell: `$env:ADMIN_PASSWORD="matkhau"` (dòng riêng) rồi `node server.js`; cmd: `set ADMIN_PASSWORD=Son12345@` rồi `node server.js`.
+- Lần chạy đầu tạo state rỗng trên Supabase và tạo admin từ `ADMIN_USER`/`ADMIN_PASSWORD`; đặt hai biến này trong Render trước deploy.
 - Máy chủ dùng `process.env.PORT` do hosting cấp; chạy cục bộ sẽ dùng cổng dự phòng `3000`. Lệnh khởi động chuẩn: `npm start` (`node server.js`).
 - Máy chủ có cấu hình dự phòng tích hợp nếu `data/defaults.json` hoặc `data/nav.json` bị thiếu lúc deploy; với cấu hình đầy đủ, vẫn nên giữ hai tệp mẫu này trong thư mục `data/`.
-- **Deploy Render:** tạo dịch vụ dạng **Web Service**, không chọn Static Site; dùng `render.yaml` (Blueprint) hoặc đặt Build Command `npm install`, Start Command `npm start`. Blueprint cấu hình Node, HTTPS và ổ đĩa bền vững tại `/var/data`; đặt `ADMIN_USER` và `ADMIN_PASSWORD` trong Render Environment. `DATA_DIR` có thể trỏ tới ổ đĩa bền vững để tài khoản, bài diễn đàn, đơn hàng và ảnh còn sau khi dịch vụ khởi động lại. Blueprint dùng gói Starter vì Render không hỗ trợ persistent disk cho Web Service miễn phí. Nếu tự tạo dịch vụ Free/không gắn disk, ứng dụng có thể chạy nhưng dữ liệu trên hệ thống tệp tạm thời sẽ mất khi Render khởi động lại hoặc redeploy.
-- Nếu không mở được Shell trên Render, có thể nhập cấu hình SePay trong **Dashboard > dịch vụ > Environment > Add Environment Variable**. Ứng dụng hỗ trợ `SONNA_BANK_NAME`, `SONNA_BANK_SHORT_NAME`, `SONNA_BANK_ACCOUNT_NUMBER`, `SONNA_BANK_VA_NUMBER`, `SONNA_BANK_ACCOUNT_NAME`, `SONNA_SEPAY_API_KEY` (hoặc `SONNA_SEPAY_HMAC_SECRET`), `SONNA_PAYMENT_CONTENT_PREFIX` và `SONNA_PAYMENT_QR_TEMPLATE`. `SONNA_BANK_ACCOUNT_NUMBER` là tài khoản chính trả về trong trường `accountNumber` của webhook để xác thực; `SONNA_BANK_VA_NUMBER` là VA BIDV dùng nhận tiền và hiển thị trên QR. Các biến này ghi đè cấu hình cùng tên trong `data/payment.json`; secrets chỉ nhập trong Render, không commit hoặc chia sẻ. Lưu thay đổi để Render deploy/restart dịch vụ, rồi kiểm tra trang Admin > Thanh toán báo SePay đã cấu hình.
-- Trên hosting, khai báo `ADMIN_USER`, `ADMIN_PASSWORD`, `NODE_ENV=production`, `COOKIE_SECURE=1` (nếu cần) và các biến môi trường khác trong mục Environment Variables/Secrets của dịch vụ. `ADMIN_USER` và `ADMIN_PASSWORD` được áp dụng mỗi lần máy chủ khởi động, kể cả khi `data/admin.json` đã tồn tại; nếu đổi mật khẩu trên hosting, hãy khởi động lại dịch vụ. Không commit `.env`, mật khẩu hay API key; `.env` và `.env.*` được loại khỏi Git. Ứng dụng hiện không tự đọc `.env`, nên chỉ tạo tệp đó sẽ không cấu hình biến môi trường.
-- Khóa SePay được đọc từ `data/payment.json`; tệp này nằm trong `data/` và được `.gitignore` loại trừ. Chỉ cấu hình trên máy chủ đang chạy, không đưa khóa lên GitHub hoặc gói ZIP cập nhật.
+- **Deploy Render:** tạo dịch vụ dạng **Web Service**, không chọn Static Site; dùng `render.yaml` (Blueprint) hoặc đặt Build Command `npm install`, Start Command `npm start`. Chạy schema Supabase trước khi deploy và cấu hình đủ `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER`, `ADMIN_PASSWORD` trong Render Environment. Khi không kết nối được schema hoặc Supabase, server sẽ không khởi động để tránh chạy với dữ liệu chỉ nằm trên đĩa tạm.
+- Cấu hình SePay qua **Admin > Thanh toán** hoặc các biến môi trường `SONNA_BANK_NAME`, `SONNA_BANK_SHORT_NAME`, `SONNA_BANK_ACCOUNT_NUMBER`, `SONNA_BANK_VA_NUMBER`, `SONNA_BANK_ACCOUNT_NAME`, `SONNA_SEPAY_API_KEY` (hoặc `SONNA_SEPAY_HMAC_SECRET`), `SONNA_PAYMENT_CONTENT_PREFIX` và `SONNA_PAYMENT_QR_TEMPLATE`. Các giá trị cấu hình từ trang admin nằm trong state Supabase; biến môi trường ghi đè cấu hình tương ứng. Secrets chỉ nhập trong Render, không commit hoặc chia sẻ.
+- Trên hosting, khai báo secrets trong mục Environment Variables/Secrets. Không commit `.env`, mật khẩu, `DATABASE_URL` hay `SUPABASE_SERVICE_ROLE_KEY`; `.env` và `.env.*` được loại khỏi Git. Ứng dụng hiện không tự đọc `.env`.
+- Khóa SePay được lưu trong state Supabase; biến môi trường SePay vẫn có thể ghi đè cấu hình. Chỉ cấu hình secrets trên hosting, không đưa khóa lên GitHub hoặc gói ZIP cập nhật.
 
 ## Gói cập nhật máy chủ
 - Tài khoản thành viên dùng chung giữa cửa hàng và diễn đàn. Trong Admin > Diễn đàn > Thành viên, admin có thể cấp hoặc thu hồi quyền đăng bài công khai ngay cho từng tài khoản; mặc định bài của thành viên vẫn chờ duyệt.
-- ZIP phát hành chứa mã nguồn, giao diện và cấu hình mẫu; không chứa dữ liệu tài khoản/đơn hàng, cấu hình thanh toán, phiên đăng nhập hoặc ảnh đã tải lên.
-- Khi cập nhật, sao lưu và giữ nguyên thư mục `data/` đang chạy trên máy chủ; chỉ thay các tệp ứng dụng. Không ghi dữ liệu mẫu cục bộ đè lên dữ liệu thật.
+- ZIP phát hành chứa mã nguồn, giao diện và cấu hình mẫu; state Supabase và ảnh Storage không nằm trong ZIP.
+- Khi cập nhật, triển khai mã nguồn mới; dữ liệu tiếp tục nằm trên Supabase. Không chạy lại SQL để xóa bảng hoặc bucket.
 - Khách truy cập chỉ thấy cửa hàng. Để mở trang đăng nhập quản trị, truy cập `/#AdminDashboard`; thanh điều hướng quản trị chỉ hiện sau khi đăng nhập admin thành công.
 - Thanh trên chỉ gồm Cửa hàng và Diễn đàn. Đăng nhập quản trị website nằm ở cuối trang cửa hàng (`/#AdminDashboard`); đăng nhập thành viên thực hiện trong trang diễn đàn tại `/community.html?login=1`, và admin đăng nhập từ diễn đàn vẫn ở lại khu quản trị diễn đàn. Trên điện thoại, các ô danh mục biểu tượng ngọc rồng trên trang chủ được ẩn để tiết kiệm không gian, còn trên PC vẫn hiển thị.
-- Trang `/community.html` là diễn đàn dùng chung tài khoản thành viên của cửa hàng. Đăng nhập diễn đàn diễn ra ngay trên trang; có thể chọn thành viên hoặc quản trị viên, và đăng nhập admin tại đây sẽ ở lại khu quản trị diễn đàn. Bài viết dùng sáu chuyên mục, hỗ trợ tối đa 8 ảnh JPG/PNG/WebP/GIF (8 MB mỗi ảnh, không hỗ trợ video), bình luận, lượt thích, hồ sơ thành viên và chat nhóm/tin riêng; dữ liệu lưu trong `data/community.json`/`data/uploads/`. Bài thành viên mặc định chờ admin duyệt; admin có thể cấp một số thành viên quyền đăng bài công khai ngay và thu hồi quyền này. Bài admin có huy hiệu riêng và hiển thị ngay. Admin có thể nhắn riêng với thành viên, duyệt/từ chối, ghim/khóa bài, xử lý báo cáo, xóa bài và khóa/mở khóa thành viên. Bình luận hỗ trợ nhắc tên bằng `@tên_đăng_nhập`; thông báo trả lời/nhắc tên có thể đánh dấu đã đọc. Khóa thành viên thu hồi phiên hiện tại và chặn đăng nhập.
+- Trang `/community.html` là diễn đàn dùng chung tài khoản thành viên của cửa hàng. Ảnh tải lên được lưu trong Supabase Storage; dữ liệu diễn đàn lưu trong `sonna_state`. Bài viết hỗ trợ tối đa 8 ảnh JPG/PNG/WebP/GIF (8 MB mỗi ảnh), bình luận, lượt thích, hồ sơ thành viên và chat nhóm/tin riêng.
 - Phần chợ, tin acc mẫu, mức phí, đơn hàng và các bước giữ/hoàn/giải ngân tại `/community.html` vẫn chỉ là giao diện demo; không thu/giữ/chuyển tiền, không xác minh người bán hoặc xử lý khiếu nại giao dịch thật. Không nhập thông tin acc game, mật khẩu game, OTP hay giấy tờ cá nhân vào bài đăng.
-- Trước khi deploy, sao lưu `data/community.json` và `data/uploads/` cùng các dữ liệu máy chủ khác. Chat nhóm hiển thị cho thành viên đăng nhập; chat riêng chỉ trả lịch sử cho hai bên trong cuộc trò chuyện. ZIP cập nhật không nên chứa dữ liệu runtime, thông tin tài khoản, ảnh tải lên hoặc bí mật của máy chủ.
+- Sao lưu state và ảnh từ Supabase theo lịch. Chat nhóm hiển thị cho thành viên đăng nhập; chat riêng chỉ trả lịch sử cho hai bên trong cuộc trò chuyện. ZIP cập nhật không chứa dữ liệu runtime, ảnh tải lên hoặc bí mật của máy chủ.
 - Footer cửa hàng hiển thị giới thiệu, hướng dẫn đọc điều khoản và các kênh Hotline, Zalo, Facebook, Nhóm Zalo, Fanpage đã cấu hình trong Admin > Nội dung website; Hotline dùng liên kết gọi điện, các kênh còn lại dùng URL HTTP/HTTPS. Link ảnh trực tiếp từ Imgur, imgbb hoặc Postimages có thể dùng cho banner, ảnh thư mục và ảnh tài khoản để ảnh không phải lưu trên máy chủ; hãy dùng URL ảnh công khai trực tiếp, không phải URL trang chia sẻ. Banner trên di động giữ toàn bộ ảnh trong khung (có thể xuất hiện viền trống nếu ảnh khác tỷ lệ), thay vì cắt mất nội dung.
 - Admin > Nội dung website > Màu giao diện cho phép chọn Tím SONNA, Navy hiện đại, Emerald chuyên nghiệp hoặc một màu chủ đạo tùy chỉnh. Chọn “Lưu và đăng” để áp dụng lên màu menu, nút chính, điểm nhấn, huy hiệu và banner mặc định; màu chữ trên nền chủ đạo tự chọn theo độ tương phản để dễ đọc, banner đã tùy chỉnh vẫn được giữ nguyên. Dòng “GAME ACCOUNT STORE” dưới logo đã được tăng kích thước và độ tương phản.
 
-## Dữ liệu (thư mục data/, không đưa lên git, nhớ sao lưu)
-- `store.json`: cấu hình/dữ liệu admin (danh mục, khuyến mãi, nội dung, số đã bán).
-- `accounts.json`: kho TK|MK thật; chỉ API admin được đọc, không đưa lên Git.
-- `admin.json`: tài khoản admin (mật khẩu băm).
-- `users.json`: khách hàng (mật khẩu băm, ví, mã giảm giá đã dùng). `orders.json`: đơn hàng.
-- `deposits.json`: mọi giao dịch tiền vào từ ngân hàng (đã cộng ví hoặc chưa khớp khách).
-- `sessions.json`: phiên đăng nhập còn hạn; được giữ qua lần khởi động lại.
-- `payment.json`: cấu hình ngân hàng + khóa SePay (CHỨA BÍ MẬT, không chia sẻ).
+## Dữ liệu và lưu trữ
+- State JSONB (`store`, `accounts`, `admin`, `users`, `orders`, `deposits`, `community`, `sessions`, `payment`) nằm trong `public.sonna_state`; RLS được bật và không có quyền truy cập client ẩn danh.
+- Sản phẩm PostgreSQL nằm trong `public.products`; ảnh được tải lên nằm trong bucket public `sonna-uploads`. Nội dung ảnh công khai có thể xem được nếu biết URL, vì vậy không tải ảnh riêng tư hoặc bí mật lên bucket này.
+- Dữ liệu hiện tại trên Render không được tự di chuyển. Bản mới khởi tạo state sạch trong Supabase như đã chọn.
+- Cấu hình thanh toán SePay nằm trong state Supabase; API key/secret chỉ cho server sử dụng.
 
 ## Nạp tiền tự động bằng SePay
 Luồng: khách chuyển khoản đúng nội dung `SONNA<ID>` (ví dụ `SONNA28`) -> SePay gọi webhook của bạn -> máy chủ cộng ví -> trang nạp của khách tự báo "Đã nhận tiền".
 
 1. Đăng ký sepay.vn, liên kết tài khoản ngân hàng nhận tiền.
-2. Mở `data/payment.json` điền: `bankName`, `bankShortName` (tên bank dùng tạo QR, đúng theo danh sách của SePay/VietQR), `accountNumber`, `accountName`.
+2. Trong Admin > Thanh toán điền `bankName`, `bankShortName` (tên bank dùng tạo QR, đúng theo danh sách của SePay/VietQR), `accountNumber`, `accountName`; hoặc khai báo các biến môi trường SePay trên Render.
 3. Trong SePay tạo Webhook: URL `https://TEN-MIEN-CUA-BAN/api/webhook/sepay`, phương thức POST, chọn "Có tiền vào". Kiểu xác thực chọn **API Key** (điền cùng khóa vào `sepay.apiKey`) hoặc **HMAC-SHA256** (điền secret vào `sepay.hmacSecret`). Có thể dùng một trong hai.
 4. Khởi động lại server. Nạp giả lập **mặc định tắt**; chỉ bật rõ ràng bằng `SIM_TOPUP=1` khi thử nghiệm cục bộ. `SIM_TOPUP=0` luôn giữ chức năng này tắt. Khi cấu hình SePay hợp lệ, giả lập vẫn bị khóa.
 - SePay chỉ gọi được địa chỉ công khai có HTTPS, nên cần đưa web lên mạng (hoặc dùng ngrok để thử).
@@ -50,7 +48,7 @@ Luồng: khách chuyển khoản đúng nội dung `SONNA<ID>` (ví dụ `SONNA2
 - Phản hồi webhook có trường `result` để đối chiếu trong delivery log: `credited` = đã cộng ví, `unmatched` = giao dịch đã lưu nhưng không ghép được thành viên, `duplicate` = mã giao dịch đã xử lý trước đó, `ignored` kèm `reason` = sai loại giao dịch/tài khoản/ID/số tiền. Các giao dịch bị bỏ qua do sai tài khoản/số tiền được lưu để admin xem trong lịch sử nạp. HTTP 200 chỉ xác nhận máy chủ đã nhận và xử lý request; hãy xem `result`, không chỉ nhìn mã HTTP. Nếu giao dịch đã bị `ignored` do `account_mismatch`, sau khi sửa `SONNA_BANK_ACCOUNT_NUMBER`, có thể gửi lại đúng giao dịch đó; máy chủ sẽ cập nhật bản ghi cũ và xử lý lại, không tạo giao dịch lặp.
 - `SONNA_BANK_ACCOUNT_NUMBER` phải là số tài khoản chính SePay gửi trong trường `accountNumber` của webhook (ví dụ `8910652172`); `SONNA_BANK_VA_NUMBER` là số VA BIDV khách chuyển vào, thường hiện ở trường `subAccount`. Website dùng số tài khoản chính để đối chiếu webhook, còn QR và trang nạp hiển thị số VA. Nếu webhook từng báo `account_mismatch`, sửa biến tài khoản chính cho khớp rồi gửi lại chính giao dịch đó.
 - Tiền vào mà nội dung sai (không tìm thấy ID khách) được ghi `unmatched` trong `deposits.json`. Xem: `GET /api/admin/deposits` (đăng nhập admin). Cộng ví tay: `POST /api/admin/users/<id>/wallet` với `{"delta": 50000}`.
-- Mã QR dùng mẫu `qrTemplate` trong `payment.json`; nếu ảnh QR không hiện, sửa mẫu theo tài liệu SePay.
+- Mã QR dùng mẫu `qrTemplate` trong cấu hình thanh toán; nếu ảnh QR không hiện, sửa mẫu theo tài liệu SePay.
 - Thưởng nạp mặc định TẮT (nạp bao nhiêu nhận bấy nhiêu). Bật trong Admin > Thanh toán > Khuyến mãi nạp.
 - Thử khi chưa có SePay: đặt `SIM_TOPUP=1` trước khi chạy (PowerShell: `$env:SIM_TOPUP="1"`). Không bật biến này trên môi trường bán thật.
 
@@ -69,7 +67,7 @@ Luồng: khách chuyển khoản đúng nội dung `SONNA<ID>` (ví dụ `SONNA2
 - Đơn hợp lệ trừ ví, đánh dấu acc đã bán và ghi đơn trong cùng journal.
 - Mỗi IP được đăng ký tối đa 5 tài khoản trong 15 phút.
 - Trang Admin Đơn hàng, Người dùng và Tổng quan đọc dữ liệu thật; admin có thể giao đơn, hoàn tiền, khóa/mở khóa tài khoản và điều chỉnh ví.
-- Cập nhật ví, tài khoản, đơn hàng và giao dịch webhook dùng journal giao dịch để khôi phục trạng thái nếu tiến trình dừng giữa các lần ghi JSON. Không xóa `data/transaction.json` khi nó đang tồn tại sau sự cố; khởi động lại máy chủ để tự khôi phục.
+- Cập nhật ví, tài khoản, đơn hàng và giao dịch webhook được ghi thành transaction PostgreSQL để không lưu dở một phần khi tiến trình dừng.
 - Cookie phiên tự thêm `Secure` khi `NODE_ENV=production`; nếu kết thúc TLS ở proxy nhưng không đặt biến này, cấu hình `COOKIE_SECURE=1`.
 
 ## Chưa làm

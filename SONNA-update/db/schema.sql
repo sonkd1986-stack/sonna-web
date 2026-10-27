@@ -12,44 +12,28 @@ CREATE TABLE IF NOT EXISTS public.products (
     CHECK (image_url ~* '^https?://')
 );
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conrelid = 'public.products'::regclass
-      AND conname = 'products_title_valid'
-  ) THEN
-    ALTER TABLE public.products
-      ADD CONSTRAINT products_title_valid
-      CHECK (char_length(btrim(title)) BETWEEN 1 AND 200);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conrelid = 'public.products'::regclass
-      AND conname = 'products_price_valid'
-  ) THEN
-    ALTER TABLE public.products
-      ADD CONSTRAINT products_price_valid
-      CHECK (price BETWEEN 0 AND 9999999999.99);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conrelid = 'public.products'::regclass
-      AND conname = 'products_image_url_valid'
-  ) THEN
-    ALTER TABLE public.products
-      ADD CONSTRAINT products_image_url_valid
-      CHECK (image_url ~* '^https?://');
-  END IF;
-END
-$$;
-
 CREATE INDEX IF NOT EXISTS products_created_at_idx
   ON public.products (created_at DESC);
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.sonna_state (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.sonna_state ENABLE ROW LEVEL SECURITY;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'sonna-uploads',
+  'sonna-uploads',
+  TRUE,
+  8388608,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+ON CONFLICT (id) DO UPDATE
+SET public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;

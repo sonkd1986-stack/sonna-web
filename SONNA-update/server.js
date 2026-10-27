@@ -1,42 +1,74 @@
 'use strict';
-// SONNA - máy chủ Node.js thuần (không cần npm install). Dữ liệu lưu bằng JSON.
+// SONNA - HTTP server with Supabase PostgreSQL state and Supabase Storage uploads.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const productApi = require('./routes/products');
+const cloudState = require('./cloud-state');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
-const DATA = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
 const CONFIG_DATA = path.join(ROOT, 'data');
+const DATA = CONFIG_DATA;
 const PAGES_DIR = path.join(ROOT, 'pages');
 const PUBLIC = path.join(ROOT, 'public');
-fs.mkdirSync(DATA, { recursive: true });
 const STORE_FILE = path.join(DATA, 'store.json');
 const ADMIN_FILE = path.join(DATA, 'admin.json');
 const MAX_BODY = 25 * 1024 * 1024;
-const UPLOADS = path.join(DATA, 'uploads');
-fs.mkdirSync(UPLOADS, { recursive: true });
-// Lưu ảnh data:URL thành file (trùng nội dung thì dùng chung 1 file), trả về đường dẫn /uploads/...
-function saveDataUrl(u) {
+const STORAGE_BUCKET = 'sonna-uploads';
+function supabaseStorageConfig() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured.');
+  const parsedUrl = new URL(url);
+  if (parsedUrl.protocol !== 'https:') throw new Error('SUPABASE_URL must use HTTPS.');
+  return { url: parsedUrl, key };
+}
+function publicStorageUrl(name) {
+  const { url } = supabaseStorageConfig();
+  return `${url.origin}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURIComponent(name)}`;
+}
+function uploadToSupabaseStorage(name, body, contentType) {
+  const config = supabaseStorageConfig();
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      protocol: config.url.protocol,
+      hostname: config.url.hostname,
+      port: config.url.port || 443,
+      method: 'POST',
+      path: `/storage/v1/object/${STORAGE_BUCKET}/${encodeURIComponent(name)}`,
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        'Content-Type': contentType,
+        'Content-Length': body.length,
+        'x-upsert': 'true'
+      }
+    }, response => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { responseBody += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return reject(new Error(`Supabase Storage upload failed (${response.statusCode}): ${responseBody.slice(0, 500)}`));
+        }
+        resolve(publicStorageUrl(name));
+      });
+    });
+    request.setTimeout(30000, () => request.destroy(new Error('Supabase Storage upload timed out.')));
+    request.on('error', reject);
+    request.end(body);
+  });
+}
+async function saveDataUrl(u, maxBytes = 8 * 1024 * 1024) {
   const m = /^data:image\/(jpeg|png|webp|gif);base64,([A-Za-z0-9+\/=]+)$/.exec(u);
   if (!m) return null;
   const buf = Buffer.from(m[2], 'base64');
-  if (!buf.length || buf.length > 8 * 1024 * 1024) return null;
+  if (!buf.length || buf.length > maxBytes) return null;
   const name = crypto.createHash('sha1').update(buf).digest('hex').slice(0, 20) + (m[1] === 'jpeg' ? '.jpg' : '.' + m[1]);
-  const file = path.join(UPLOADS, name);
-  if (!fs.existsSync(file)) fs.writeFileSync(file, buf);
-  return '/uploads/' + name;
-}
-// Chuyển ảnh base64 cũ trong store.json sang file
-function migrateImages(node) {
-  let n = 0;
-  (function walk(o) {
-    if (Array.isArray(o)) o.forEach((v, i) => { if (typeof v === 'string' && v.startsWith('data:image/')) { const u = saveDataUrl(v); if (u) { o[i] = u; n++; } } else walk(v); });
-    else if (o && typeof o === 'object') Object.keys(o).forEach(k => { const v = o[k]; if (typeof v === 'string' && v.startsWith('data:image/')) { const u = saveDataUrl(v); if (u) { o[k] = u; n++; } } else walk(v); });
-  })(node);
-  return n;
+  return uploadToSupabaseStorage(name, buf, `image/${m[1]}`);
 }
 const USERS_FILE = path.join(DATA, 'users.json');
 const ORDERS_FILE = path.join(DATA, 'orders.json');
@@ -46,7 +78,6 @@ const SESSION_FILE = path.join(DATA, 'sessions.json');
 const DEFAULTS = readJSONEarly(path.join(CONFIG_DATA, 'defaults.json'), { codes: {} });
 const PAYMENT_FILE = path.join(DATA, 'payment.json');
 const DEPOSITS_FILE = path.join(DATA, 'deposits.json');
-const TRANSACTION_FILE = path.join(DATA, 'transaction.json');
 function readJSONEarly(f, fallback) {
   if (!fs.existsSync(f)) return fallback;
   return JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -68,77 +99,38 @@ const PAGE_KEYS = new Set(NAV.map(n => n.k));
 
 // ---------- JSON file helpers ----------
 function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
+  return cloudState.readJSON(file, fallback);
 }
 function writeJSON(file, obj) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
-  fs.renameSync(tmp, file); // ghi nguyên tử
-}
-const TRANSACTION_TARGETS = new Map([
-  [path.basename(STORE_FILE), STORE_FILE],
-  [path.basename(USERS_FILE), USERS_FILE],
-  [path.basename(ORDERS_FILE), ORDERS_FILE],
-  [path.basename(DEPOSITS_FILE), DEPOSITS_FILE],
-  [path.basename(ACCOUNTS_FILE), ACCOUNTS_FILE]
-]);
-let persistenceBlocked = false;
-function recoverTransaction() {
-  if (!fs.existsSync(TRANSACTION_FILE)) return false;
-  const journal = JSON.parse(fs.readFileSync(TRANSACTION_FILE, 'utf8'));
-  if (!journal || !Array.isArray(journal.files) || !journal.files.length) throw new Error('Invalid data transaction journal.');
-  journal.files.forEach(entry => {
-    const target = TRANSACTION_TARGETS.get(entry.name);
-    if (!target || typeof entry.content !== 'string') throw new Error('Invalid data transaction entry.');
-    writeJSON(target, JSON.parse(entry.content));
-  });
-  fs.unlinkSync(TRANSACTION_FILE);
-  return true;
+  cloudState.writeJSON(file, obj);
 }
 function commitState(updates) {
-  const files = Object.keys(updates).map(file => {
-    const name = path.basename(file);
-    if (TRANSACTION_TARGETS.get(name) !== file) throw new Error('Unsupported data transaction target.');
-    return { name, content: JSON.stringify(updates[file], null, 2) };
-  });
-  if (!files.length) return;
-  writeJSON(TRANSACTION_FILE, { files });
-  try {
-    recoverTransaction();
-  } catch (e) {
-    persistenceBlocked = true;
-    throw e;
-  }
+  cloudState.writeBatch(updates);
 }
-recoverTransaction();
 let store = readJSON(STORE_FILE, {});
 const emptyAccounts = () => ({ listed: [], ov: {}, edits: {}, added: [], subPics: {}, accPics: {}, delSubs: {}, rulesData: null });
 let accountsDb = readJSON(ACCOUNTS_FILE, null);
-if (!accountsDb) {
-  accountsDb = store.acc && typeof store.acc === 'object' ? store.acc : emptyAccounts();
-  if (store.acc) {
-    store = { ...store };
-    delete store.acc;
-    commitState({ [ACCOUNTS_FILE]: accountsDb, [STORE_FILE]: store });
-  } else writeJSON(ACCOUNTS_FILE, accountsDb);
-}
-{ const n = migrateImages(store); if (n) { writeJSON(STORE_FILE, store); console.log('[SONNA] Đã chuyển ' + n + ' ảnh sang data/uploads/'); } }
+if (!accountsDb) accountsDb = store.acc && typeof store.acc === 'object' ? store.acc : emptyAccounts();
 process.on('SIGINT', () => process.exit(0));
 process.on('SIGTERM', () => process.exit(0));
 
 // ---------- Admin account (scrypt) ----------
 function hashPw(pw, salt) { return crypto.scryptSync(pw, salt, 64).toString('hex'); }
-let admin = readJSON(ADMIN_FILE, null);
+let admin = null;
 const configuredAdminUser = typeof process.env.ADMIN_USER === 'string' ? process.env.ADMIN_USER.trim() : '';
 const configuredAdminPassword = typeof process.env.ADMIN_PASSWORD === 'string' ? process.env.ADMIN_PASSWORD : '';
-if (!admin) {
-  const pw = configuredAdminPassword || crypto.randomBytes(6).toString('hex');
-  const salt = crypto.randomBytes(16).toString('hex');
-  admin = { username: configuredAdminUser || 'admin', salt, hash: hashPw(pw, salt) };
-  writeJSON(ADMIN_FILE, admin);
-  if (configuredAdminPassword) console.log(`\n[SONNA] Đã tạo tài khoản admin: ${admin.username} (mật khẩu lấy từ biến môi trường).\n`);
-  else console.log(`\n[SONNA] Đã tạo tài khoản admin: ${admin.username} / ${pw}\n        (đổi bằng cách xóa data/admin.json hoặc đặt ADMIN_USER, ADMIN_PASSWORD)\n`);
-} else {
+function initializeAdmin() {
+  admin = readJSON(ADMIN_FILE, null);
+  if (!admin) {
+    const pw = configuredAdminPassword || crypto.randomBytes(6).toString('hex');
+    const salt = crypto.randomBytes(16).toString('hex');
+    admin = { username: configuredAdminUser || 'admin', salt, hash: hashPw(pw, salt) };
+    writeJSON(ADMIN_FILE, admin);
+    if (configuredAdminPassword) console.log(`\n[SONNA] Đã tạo tài khoản admin: ${admin.username} (mật khẩu lấy từ biến môi trường).\n`);
+    else console.log(`\n[SONNA] Đã tạo tài khoản admin: ${admin.username} / ${pw}\n        (đặt ADMIN_USER, ADMIN_PASSWORD trong Render để cấu hình admin).\n`);
+    return;
+  }
+
   let changed = false;
   if (configuredAdminUser && configuredAdminUser !== admin.username) {
     admin.username = configuredAdminUser;
@@ -170,7 +162,6 @@ const PAYMENT_TEMPLATE = {
   qrTemplate: 'https://qr.sepay.vn/img?acc={acc}&bank={bank}&amount={amount}&des={des}',
   sepay: { apiKey: '', hmacSecret: '' }
 };
-if (!fs.existsSync(PAYMENT_FILE)) fs.writeFileSync(PAYMENT_FILE, JSON.stringify(PAYMENT_TEMPLATE, null, 2));
 function paymentSetting(name, fallback) {
   const value = process.env[name];
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
@@ -647,7 +638,7 @@ function topupBonus(amount) {
 // ---------- Sessions ----------
 const sessions = new Map(); // token -> expiry
 const SESSION_MS = 8 * 3600 * 1000;
-const savedSessions = readJSON(SESSION_FILE, { admin: [], customer: [] });
+let savedSessions = readJSON(SESSION_FILE, { admin: [], customer: [] });
 const now = Date.now();
 ((savedSessions && Array.isArray(savedSessions.admin)) ? savedSessions.admin : []).forEach(([token, expires]) => { if (/^[a-f0-9]{48}$/.test(token) && Number(expires) > now) sessions.set(token, Number(expires)); });
 ((savedSessions && Array.isArray(savedSessions.customer)) ? savedSessions.customer : []).forEach(([token, entry]) => { if (/^[a-f0-9]{48}$/.test(token) && entry && Number(entry.exp) > now) cSessions.set(token, { id: Number(entry.id), exp: Number(entry.exp) }); });
@@ -685,9 +676,16 @@ function registrationLimited(ip) {
 
 // ---------- HTTP helpers ----------
 function send(res, status, obj, headers) {
-  const body = JSON.stringify(obj);
-  res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, headers));
-  res.end(body);
+  return cloudState.flush().then(() => {
+    res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, headers));
+    res.end(JSON.stringify(obj));
+  }).catch(error => {
+    console.error('[SONNA] Supabase state persistence failed:', error);
+    if (!res.headersSent) {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ error: 'Không thể lưu dữ liệu lên Supabase. Yêu cầu chưa được xác nhận.' }));
+    }
+  });
 }
 function readRaw(req) {
   return new Promise((resolve, reject) => {
@@ -709,7 +707,6 @@ async function handle(req, res) {
   const ip = req.socket.remoteAddress;
 
   if (p.startsWith('/api/')) {
-    if (persistenceBlocked) return send(res, 503, { error: 'Dữ liệu đang gặp lỗi lưu trữ. Vui lòng khởi động lại máy chủ.' });
     try {
       if (p === '/api/session' && req.method === 'GET') {
         const cu = getUser(req);
@@ -852,7 +849,7 @@ async function handle(req, res) {
       if (p === '/api/community/images' && req.method === 'POST') {
         if (!getUser(req)) return send(res, 401, { error: 'Đăng nhập thành viên để tải ảnh.' });
         const body = await readBody(req);
-        const imageUrl = saveDataUrl(String(body.dataUrl || ''));
+        const imageUrl = await saveDataUrl(String(body.dataUrl || ''));
         if (!imageUrl) return send(res, 400, { error: 'Ảnh không hợp lệ hoặc vượt quá 8 MB (JPG, PNG, WebP, GIF).' });
         return send(res, 201, { url: imageUrl });
       }
@@ -1221,7 +1218,7 @@ async function handle(req, res) {
       if (p === '/api/admin/upload' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         const b = await readBody(req);
-        const url2 = saveDataUrl(String(b.dataUrl || ''));
+        const url2 = await saveDataUrl(String(b.dataUrl || ''), 4 * 1024 * 1024);
         if (!url2) return send(res, 400, { error: 'Ảnh không hợp lệ (chỉ nhận JPG/PNG/WEBP, tối đa 4MB).' });
         return send(res, 200, { ok: true, url: url2 });
       }
@@ -1279,12 +1276,10 @@ async function handle(req, res) {
     try { decoded = decodeURIComponent(p); }
     catch (e) { res.writeHead(400); return res.end('Bad request'); }
     const nm = path.basename(decoded);
-    return fs.readFile(path.join(UPLOADS, nm), (err, buf) => {
-      if (err) { res.writeHead(404); return res.end('Not found'); }
-      const ext = path.extname(nm);
-      res.writeHead(200, { 'Content-Type': ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' });
-      res.end(buf);
-    });
+    if (!/^[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(nm)) { res.writeHead(404); return res.end('Not found'); }
+    const imageUrl = publicStorageUrl(nm);
+    res.writeHead(302, { Location: imageUrl, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    return res.end();
   }
 
   // static
@@ -1301,7 +1296,50 @@ async function handle(req, res) {
   });
 }
 
-http.createServer((req, res) => {
+async function startServer() {
+  supabaseStorageConfig();
+  await cloudState.initialize();
+  store = readJSON(STORE_FILE, {});
+  accountsDb = readJSON(ACCOUNTS_FILE, emptyAccounts());
+  usersDb = readJSON(USERS_FILE, { nextId: 28, users: [] });
+  orders = readJSON(ORDERS_FILE, []);
+  communityDb = readJSON(COMMUNITY_FILE, { nextPostId: 1, posts: [] });
+  if (!communityDb || !Array.isArray(communityDb.posts)) communityDb = { nextPostId: 1, posts: [] };
+  if (!Array.isArray(communityDb.messages)) communityDb.messages = [];
+  if (!Array.isArray(communityDb.notifications)) communityDb.notifications = [];
+  if (!Array.isArray(communityDb.reports)) communityDb.reports = [];
+  communityDb.nextPostId = Math.max(Number(communityDb.nextPostId) || 1, ...communityDb.posts.map(post => Number(post.id) + 1 || 1));
+  communityDb.nextNotificationId = Math.max(Number(communityDb.nextNotificationId) || 1, ...communityDb.notifications.map(notification => Number(notification.id) + 1 || 1));
+  communityDb.nextReportId = Math.max(Number(communityDb.nextReportId) || 1, ...communityDb.reports.map(report => Number(report.id) + 1 || 1));
+  deposits = readJSON(DEPOSITS_FILE, []);
+  depositIds.clear();
+  deposits.forEach(deposit => depositIds.add(String(deposit.txId)));
+  savedSessions = readJSON(SESSION_FILE, { admin: [], customer: [] });
+  sessions.clear();
+  cSessions.clear();
+  const sessionNow = Date.now();
+  (Array.isArray(savedSessions.admin) ? savedSessions.admin : []).forEach(([token, expires]) => {
+    if (/^[a-f0-9]{48}$/.test(token) && Number(expires) > sessionNow) sessions.set(token, Number(expires));
+  });
+  (Array.isArray(savedSessions.customer) ? savedSessions.customer : []).forEach(([token, entry]) => {
+    if (/^[a-f0-9]{48}$/.test(token) && entry && Number(entry.exp) > sessionNow) cSessions.set(token, { id: Number(entry.id), exp: Number(entry.exp) });
+  });
+  initializeAdmin();
+  if (!cloudState.has('payment.json')) writeJSON(PAYMENT_FILE, PAYMENT_TEMPLATE);
+  [
+    [STORE_FILE, store],
+    [ACCOUNTS_FILE, accountsDb],
+    [USERS_FILE, usersDb],
+    [ORDERS_FILE, orders],
+    [COMMUNITY_FILE, communityDb],
+    [DEPOSITS_FILE, deposits],
+    [SESSION_FILE, savedSessions]
+  ].forEach(([file, value]) => {
+    if (!cloudState.has(path.basename(file))) writeJSON(file, value);
+  });
+  await cloudState.flush();
+
+  const server = http.createServer((req, res) => {
   const requestPath = new URL(req.url, 'http://localhost').pathname;
   if (requestPath === '/api/products' || requestPath === '/api/db-test' || requestPath === '/products') {
     if ((requestPath === '/api/db-test' || (requestPath === '/api/products' && req.method === 'POST')) && !isAuthed(req)) {
@@ -1310,5 +1348,12 @@ http.createServer((req, res) => {
     return productApi(req, res);
   }
   return handle(req, res);
-}).listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log(`[SONNA] Dữ liệu lưu tại: ${DATA}`); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Điền data/payment.json (ngân hàng + khóa SePay) hoặc chạy SIM_TOPUP=0 khi bán thật.');
-  if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem data/payment.json và README.'); });
+  });
+  server.listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log('[SONNA] Dữ liệu bền vững lưu trên Supabase PostgreSQL và Storage.'); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Cấu hình ngân hàng/SePay trong Admin > Thanh toán hoặc biến môi trường; hoặc chạy SIM_TOPUP=0 khi bán thật.');
+  if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem Admin > Thanh toán và README.'); });
+}
+
+startServer().catch(error => {
+  console.error('[SONNA] Không thể khởi động với Supabase:', error);
+  process.exitCode = 1;
+});

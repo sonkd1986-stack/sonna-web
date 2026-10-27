@@ -31,4 +31,4 @@ async function testConnection() {
   return result.rows[0];
 }
 
-module.exports = { query, testConnection };
+module.exports = { query, testConnection, getPool };

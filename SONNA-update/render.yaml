@@ -5,18 +5,16 @@ services:
     plan: starter
     buildCommand: npm install
     startCommand: npm start
-    disk:
-      name: sonna-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_DIR
-        value: /var/data
       - key: ADMIN_USER
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
       - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
