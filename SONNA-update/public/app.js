@@ -23,7 +23,7 @@
       }); });
   }
 
-  // Store đồng bộ trong bộ nhớ, ghi nền lên máy chủ (data/store.json)
+  // Store đồng bộ trong bộ nhớ, ghi nền lên Supabase.
   window.SONNA_USER = null; window.SONNA_ORDERS = []; window.SONNA_ADMIN = false;
   window.SONNA_API = api; // cửa hàng gọi API khách hàng qua đây
   function persistStoreValue(k, v) {
@@ -201,7 +201,7 @@
     lo.onclick = function () {     api('POST', '/api/logout').then(function () { authed = false; window.SONNA_ADMIN = false; bar.style.display = 'none'; lo.style.display = 'none'; go('Store', ''); }); };
     bar.appendChild(lo);
     var note = document.createElement('span'); note.id = 'note'; note.style.marginLeft = '0';
-    note.textContent = 'Node.js · dữ liệu lưu trong data/store.json'; bar.appendChild(note);
+    note.textContent = 'Node.js · dữ liệu lưu trên Supabase'; bar.appendChild(note);
   }
 
   function markNav(k) {
