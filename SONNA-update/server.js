@@ -187,7 +187,7 @@ const payCfg = () => {
 };
 const payReady = () => { const c = payCfg(); return !!(c.accountNumber && c.bankShortName && (c.sepay && (c.sepay.apiKey || c.sepay.hmacSecret))); };
 function gachTheCfg() {
-  const apiUrl = String(process.env.GACHTHE_API_URL || 'https://gachthe.vn/chargingws/v2').trim();
+  const apiUrl = String(process.env.GACHTHE_API_URL || 'https://gachtheauto.com/chargingws/v2').trim();
   let endpoint = null;
   try {
     const parsed = new URL(apiUrl);
@@ -195,7 +195,7 @@ function gachTheCfg() {
   } catch (error) {}
   return {
     endpoint,
-    partnerId: String(process.env.GACHTHE_PARTNER_ID || '66250095675').trim(),
+    partnerId: String(process.env.GACHTHE_PARTNER_ID || '27812633053').trim(),
     partnerKey: String(process.env.GACHTHE_PARTNER_KEY || '').trim()
   };
 }
@@ -368,15 +368,24 @@ async function callGachThe(fields) {
   }
   return payload;
 }
-function gachTheSign(code, serial, partnerKey) {
+function gachTheChargingSign(code, requestId, serial, telco, partnerId, partnerKey) {
+  return crypto.createHash('md5')
+    .update(partnerKey + code + 'charging' + partnerId + requestId + serial + telco)
+    .digest('hex');
+}
+function gachTheCheckSign(requestId, partnerId, partnerKey) {
+  return crypto.createHash('md5')
+    .update(partnerKey + 'check' + partnerId + requestId)
+    .digest('hex');
+}
+function gachTheCallbackSign(code, serial, partnerKey) {
   return crypto.createHash('md5').update(partnerKey + code + serial).digest('hex');
 }
-async function checkGachTheCard(txn, telco, code, serial) {
+async function checkGachTheCard(txn) {
   const cfg = gachTheCfg();
   const result = await callGachThe({
-    telco, code, serial, amount: String(txn.declaredValue),
     request_id: txn.requestId, partner_id: cfg.partnerId,
-    sign: gachTheSign(code, serial, cfg.partnerKey), command: 'check'
+    sign: gachTheCheckSign(txn.requestId, cfg.partnerId, cfg.partnerKey), command: 'check'
   });
   return result;
 }
@@ -398,7 +407,7 @@ async function handleGachTheCallback(payload) {
   if (!/^[a-f0-9]{32}$/.test(requestId) || !/^\d{6,32}$/.test(code) || !/^\d{6,32}$/.test(serial)) {
     return { status: 400, body: { success: false } };
   }
-  const signature = gachTheSign(code, serial, cfg.partnerKey);
+  const signature = gachTheCallbackSign(code, serial, cfg.partnerKey);
   if (!sameHex(signature, payload.callback_sign)) return { status: 401, body: { success: false } };
   const txId = 'gachthe:' + requestId;
   const txn = deposits.find(deposit => deposit.txId === txId && deposit.type === 'gachthe');
@@ -408,7 +417,7 @@ async function handleGachTheCallback(payload) {
   if (txn.status === 'credited' || txn.status === 'failed') {
     return { status: 200, body: { success: true, duplicate: true } };
   }
-  const checked = await checkGachTheCard(txn, telco, code, serial);
+  const checked = await checkGachTheCard(txn);
   const checkedStatus = Number(checked.status);
   if (checkedStatus === 99) return { status: 503, body: { success: false, pending: true } };
   const checkedRequestId = String(checked.request_id || '');
@@ -1283,21 +1292,30 @@ async function handle(req, res) {
         try {
           const providerResult = await callGachThe({
             telco, code, serial, amount: String(declaredValue), request_id: requestId,
-            partner_id: cfg.partnerId, sign: gachTheSign(code, serial, cfg.partnerKey),
+            partner_id: cfg.partnerId,
+            sign: gachTheChargingSign(code, requestId, serial, telco, cfg.partnerId, cfg.partnerKey),
             command: 'charging'
           });
           const providerStatus = Number(providerResult.status);
           if (![1, 99].includes(providerStatus)) {
+            const providerMessage = String(providerResult.message || providerResult.msg || '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 160);
             updateGachTheDeposit(txn.txId, {
               status: 'failed', providerStatus,
-              providerMessage: String(providerResult.message || '').slice(0, 160),
+              providerMessage,
               updatedAt: new Date().toISOString()
             });
-            return send(res, 400, { error: 'Nhà cung cấp không nhận được thẻ. Kiểm tra trạng thái trước khi thử lại.', requestId });
+            return send(res, 400, {
+              error: `Gạch Thẻ từ chối yêu cầu (mã ${Number.isFinite(providerStatus) ? providerStatus : 'không rõ'}).${providerMessage ? ' ' + providerMessage : ''} Không gửi lại thẻ này trước khi kiểm tra trạng thái.`,
+              providerStatus: Number.isFinite(providerStatus) ? providerStatus : null,
+              requestId
+            });
           }
           if (providerStatus === 1) {
             await handleGachTheCallback({
-              request_id: requestId, code, serial, telco, callback_sign: gachTheSign(code, serial, cfg.partnerKey)
+              request_id: requestId, code, serial, telco, callback_sign: gachTheCallbackSign(code, serial, cfg.partnerKey)
             });
           }
           return send(res, 202, {
