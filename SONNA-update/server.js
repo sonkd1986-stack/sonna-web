@@ -860,7 +860,12 @@ const now = Date.now();
 ((savedSessions && Array.isArray(savedSessions.customer)) ? savedSessions.customer : []).forEach(([token, entry]) => { if (/^[a-f0-9]{48}$/.test(token) && entry && Number(entry.exp) > now) cSessions.set(token, { id: Number(entry.id), exp: Number(entry.exp) }); });
 function saveSessions() {
   writeJSON(SESSION_FILE, {
-    admin: Array.from(sessions.entries()).filter(([, exp]) => exp > Date.now()),
+    admin: Array.from(adminSessionUsers.entries()).filter(([, entry]) => Number(entry.exp) > Date.now()).map(([token, entry]) => [token, {
+      id: entry.id,
+      role: entry.role || 'admin',
+      username: entry.username || '',
+      exp: Number(entry.exp)
+    }]),
     customer: Array.from(cSessions.entries()).filter(([, entry]) => entry.exp > Date.now())
   });
 }
@@ -1798,8 +1803,20 @@ async function startServer() {
   sessions.clear();
   cSessions.clear();
   const sessionNow = Date.now();
-  (Array.isArray(savedSessions.admin) ? savedSessions.admin : []).forEach(([token, expires]) => {
-    if (/^[a-f0-9]{48}$/.test(token) && Number(expires) > sessionNow) sessions.set(token, Number(expires));
+  (Array.isArray(savedSessions.admin) ? savedSessions.admin : []).forEach(([token, value]) => {
+    if (!/^[a-f0-9]{48}$/.test(token)) return;
+    const expires = Number(typeof value === 'object' && value ? value.exp : value);
+    if (!Number.isFinite(expires) || expires <= sessionNow) return;
+    sessions.set(token, expires);
+    const adminEntry = typeof value === 'object' && value ? value : null;
+    if (adminEntry && (adminEntry.id !== undefined || adminEntry.role || adminEntry.username)) {
+      adminSessionUsers.set(token, {
+        id: adminEntry.id,
+        role: adminEntry.role || 'admin',
+        username: adminEntry.username || '',
+        exp: expires
+      });
+    }
   });
   (Array.isArray(savedSessions.customer) ? savedSessions.customer : []).forEach(([token, entry]) => {
     if (/^[a-f0-9]{48}$/.test(token) && entry && Number(entry.exp) > sessionNow) cSessions.set(token, { id: Number(entry.id), exp: Number(entry.exp) });
