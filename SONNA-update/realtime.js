@@ -42,7 +42,7 @@ function publishStoreChange(changedKeys) {
       path: '/realtime/v1/api/broadcast',
       headers: {
         apikey: key,
-        Authorization: `Bearer ${key}`,
+        Authorization: ['Bearer ', key].join(''),
         'Content-Type': 'application/json',
         'Content-Length': body.length
       }

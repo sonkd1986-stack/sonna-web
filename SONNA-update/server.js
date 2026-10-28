@@ -43,7 +43,7 @@ function uploadToSupabaseStorage(name, body, contentType) {
       path: `/storage/v1/object/${STORAGE_BUCKET}/${encodeURIComponent(name)}`,
       headers: {
         apikey: config.key,
-        Authorization: `Bearer ${config.key}`,
+        Authorization: ['Bearer ', config.key].join(''),
         'Content-Type': contentType,
         'Content-Length': body.length,
         'x-upsert': 'true'
