@@ -665,7 +665,35 @@ function renameAccountId(oldId, newId) {
 function eligibleAccounts() {
   return accountRecords().filter(a => a && a.cat !== 'promo' && !a.del && a.status === 'Đang bán' && String(a.tk || '').trim() && String(a.mk || '').trim());
 }
-function publicUser(u) { return u ? { id: u.id, username: u.username, wallet: u.wallet, usedCodes: u.usedCodes, communityPostAutoApprove: !!u.communityPostAutoApprove } : null; }
+function normalizeUserRole(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'admin') return 'admin';
+  if (r === 'ctv') return 'ctv';
+  return 'customer';
+}
+function isAdminUser(user) {
+  return !!user && (normalizeUserRole(user.role) === 'admin' || user.username === (admin && admin.username));
+}
+function isCTVUser(user) {
+  return !!user && normalizeUserRole(user.role) === 'ctv';
+}
+function accountVisibleToUser(user, account) {
+  if (!account || typeof account !== 'object') return false;
+  if (!user || isAdminUser(user)) return true;
+  if (!isCTVUser(user)) return false;
+  return String(account.sellerId || account.ownerId || 'system') === String(user.id);
+}
+function publicUser(u) {
+  return u ? {
+    id: u.id,
+    username: u.username,
+    wallet: u.wallet,
+    role: normalizeUserRole(u.role),
+    createdByAdminId: u.createdByAdminId || null,
+    usedCodes: u.usedCodes,
+    communityPostAutoApprove: !!u.communityPostAutoApprove
+  } : null;
+}
 function userOrders(u) { return orders.filter(o => o.userId === u.id).reverse().map(({ userId, ...o }) => o); }
 function fmtTime(d) {
   const t = new Date(d.getTime() + 7 * 3600 * 1000); // giờ Việt Nam
@@ -768,10 +796,12 @@ function createOrder(user, body) {
   const orderId = 'DH-' + (20853 + seq);
   const assigned = candidates.slice(0, qty);
   const allAssigned = assigned.concat(gifted);
+  const sellerId = assigned.find(a => Number(a.sellerId) || Number(a.ownerId)) ? (Number(assigned.find(a => Number(a.sellerId) || Number(a.ownerId)).sellerId) || Number(assigned.find(a => Number(a.sellerId) || Number(a.ownerId)).ownerId) || null) : null;
   const order = {
-    code: orderId, userId: user.id, title: item.title + (item.isPack ? ' × ' + qty : ''),
+    code: orderId, userId: user.id, sellerId, title: item.title + (item.isPack ? ' × ' + qty : ''),
     itemId: item.id, qty, coupon: cp ? cp.code : '', discount, total, time: fmtTime(new Date()),
-    createdAt: new Date().toISOString(), status: 'Đã thanh toán', inventoryIds: allAssigned.map(a => a.id),
+    createdAt: new Date().toISOString(), status: 'Đã thanh toán', settlementStatus: 'pending',
+    inventoryIds: allAssigned.map(a => a.id),
     accs: assigned.map(a => ({ line: a.tk + '|' + a.mk, tag: 'Acc mua', col: '#14744E' }))
       .concat(gifted.map(a => ({ line: a.tk + '|' + a.mk, tag: 'Quà tặng', col: '#8A4B00' })))
   };
@@ -788,7 +818,14 @@ function createOrder(user, body) {
   }
   assigned.forEach(a => {
     nextAccounts.ov = nextAccounts.ov || {};
-    nextAccounts.ov[a.id] = { ...(nextAccounts.ov[a.id] || {}), status: 'Đã bán', orderId, soldAt: new Date().toISOString(), soldTo: user.id };
+    nextAccounts.ov[a.id] = {
+      ...(nextAccounts.ov[a.id] || {}),
+      status: 'Đã bán',
+      orderId,
+      soldAt: new Date().toISOString(),
+      soldTo: user.id,
+      sellerId: a.sellerId || a.ownerId || sellerId || null
+    };
   });
   gifted.forEach(a => {
     nextAccounts.ov = nextAccounts.ov || {};
@@ -815,6 +852,7 @@ function topupBonus(amount) {
 
 // ---------- Sessions ----------
 const sessions = new Map(); // token -> expiry
+const adminSessionUsers = new Map(); // token -> { id, role, exp }
 const SESSION_MS = 8 * 3600 * 1000;
 let savedSessions = readJSON(SESSION_FILE, { admin: [], customer: [] });
 const now = Date.now();
@@ -830,10 +868,19 @@ function getToken(req) {
   const m = /(?:^|;\s*)sid=([a-f0-9]{48})/.exec(req.headers.cookie || '');
   return m ? m[1] : null;
 }
+function getAdminSessionUser(req) {
+  const t = getToken(req); if (!t) return null;
+  const entry = adminSessionUsers.get(t); if (!entry || Number(entry.exp) < Date.now()) { adminSessionUsers.delete(t); return null; }
+  if (entry.role === 'admin' || entry.username === (admin && admin.username)) {
+    return { id: 'admin', username: (admin && admin.username) || (entry.username || 'admin'), role: 'admin', locked: false, wallet: 0 };
+  }
+  const user = usersDb.users.find(u => String(u.id) === String(entry.id));
+  return user && !user.locked ? user : null;
+}
 function isAuthed(req) {
   const t = getToken(req); if (!t) return false;
   const exp = sessions.get(t);
-  if (!exp || exp < Date.now()) { sessions.delete(t); return false; }
+  if (!exp || exp < Date.now()) { sessions.delete(t); adminSessionUsers.delete(t); return false; }
   return true;
 }
 const fails = new Map(); // ip -> {n, until}
@@ -910,16 +957,29 @@ async function handle(req, res) {
       if (p === '/api/login' && req.method === 'POST') {
         if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
         const b = await readBody(req);
-        if (!checkLogin(b.username, b.password)) {
+        const username = String(b.username || '').trim();
+        const password = String(b.password || '');
+        const ctvUser = usersDb.users.find(user => user.username.toLowerCase() === username.toLowerCase() && normalizeUserRole(user.role) === 'ctv');
+        const adminOk = checkLogin(username, password);
+        const ctvOk = !!ctvUser && crypto.timingSafeEqual(Buffer.from(hashPw(password, ctvUser.salt), 'hex'), Buffer.from(ctvUser.hash, 'hex'));
+        if (!adminOk && !ctvOk) {
           const f = fails.get(ip) || { n: 0 }; f.n++; f.until = Date.now() + 5 * 60000; fails.set(ip, f);
           return send(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
         }
         fails.delete(ip);
         const t = crypto.randomBytes(24).toString('hex');
-        sessions.set(t, Date.now() + SESSION_MS);
+        const exp = Date.now() + SESSION_MS;
+        sessions.set(t, exp);
+        if (adminOk && !ctvUser) {
+          adminSessionUsers.set(t, { id: 'admin', role: 'admin', username: admin.username, exp });
+        }
+        if (ctvUser) {
+          adminSessionUsers.set(t, { id: ctvUser.id, role: 'ctv', username: ctvUser.username, exp });
+        }
         saveSessions();
         const secure = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
-        return send(res, 200, { ok: true }, { 'Set-Cookie': `sid=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}` });
+        const userPayload = ctvUser ? publicUser(ctvUser) : { username: admin.username, role: 'admin' };
+        return send(res, 200, { ok: true, user: userPayload }, { 'Set-Cookie': `sid=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}` });
       }
       if (p === '/api/logout' && req.method === 'POST') {
         const t = getToken(req); if (t) sessions.delete(t);
@@ -1208,7 +1268,7 @@ async function handle(req, res) {
           if (usersDb.users.some(x => x.username.toLowerCase() === username.toLowerCase())) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
           const salt = crypto.randomBytes(16).toString('hex');
           const nextUsers = JSON.parse(JSON.stringify(usersDb));
-          u = { id: nextUsers.nextId++, username, salt, hash: hashPw(password, salt), wallet: 0, usedCodes: [], createdAt: new Date().toISOString() };
+          u = { id: nextUsers.nextId++, username, salt, hash: hashPw(password, salt), wallet: 0, role: 'customer', usedCodes: [], createdAt: new Date().toISOString() };
           nextUsers.users.push(u);
           commitState({ [USERS_FILE]: nextUsers });
           usersDb = nextUsers;
@@ -1406,11 +1466,96 @@ async function handle(req, res) {
             .sort((a, b) => String(b.sortAt).localeCompare(String(a.sortAt)))
             .map(({ sortAt, ...transaction }) => transaction);
           return { id: u.id, username: u.username, wallet: u.wallet, createdAt: u.createdAt,
+            role: normalizeUserRole(u.role),
+            createdByAdminId: u.createdByAdminId || null,
             orderCount: userOrdersList.length, spent: userOrdersList.filter(o => o.status !== 'Đã hoàn tiền').reduce((sum, o) => sum + (Number(o.total) || 0), 0),
             toppedUp: depositsList.reduce((sum, d) => sum + (Number(d.amount) + (Number(d.bonus) || 0)), 0),
-            locked: !!u.locked, usedCodes: u.usedCodes || [], recent, transactions };
+            locked: !!u.locked, usedCodes: u.usedCodes || [], recent, transactions, isAdmin: isAdminUser(u), isCTV: isCTVUser(u) };
         });
         return send(res, 200, { users: list });
+      }
+      if (p === '/api/admin/ctv/create' && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const actor = getAdminSessionUser(req) || getUser(req);
+        if (!actor || !isAdminUser(actor)) return send(res, 403, { error: 'Chỉ admin mới được tạo tài khoản CTV.' });
+        const body = await readBody(req);
+        const username = String(body.username || '').trim();
+        const password = String(body.password || '');
+        const name = String(body.name || '').trim() || username;
+        const contact = String(body.contact || '').trim();
+        if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) return send(res, 400, { error: 'Tên đăng nhập 3–30 ký tự: chữ, số, _ . -' });
+        if (password.length < 6 || password.length > 100) return send(res, 400, { error: 'Mật khẩu cần từ 6 ký tự.' });
+        if (usersDb.users.some(u => u.username.toLowerCase() === username.toLowerCase())) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
+        const salt = crypto.randomBytes(16).toString('hex');
+        const nextUsers = JSON.parse(JSON.stringify(usersDb));
+        const user = {
+          id: nextUsers.nextId++, username, salt, hash: hashPw(password, salt),
+          wallet: 0, usedCodes: [], role: 'ctv', name, contact,
+          createdAt: new Date().toISOString(), createdByAdminId: 'admin'
+        };
+        nextUsers.users.push(user);
+        commitState({ [USERS_FILE]: nextUsers });
+        usersDb = nextUsers;
+        return send(res, 200, { ok: true, user: publicUser(user) });
+      }
+      if (p === '/api/admin/ctv' && req.method === 'GET') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const actor = getAdminSessionUser(req) || getUser(req);
+        if (!actor || !isAdminUser(actor)) return send(res, 403, { error: 'Chỉ admin mới xem danh sách CTV.' });
+        const ctvs = usersDb.users.filter(u => normalizeUserRole(u.role) === 'ctv').map(u => {
+          const sellerOrders = orders.filter(o => Number(o.sellerId) === u.id && o.status !== 'Đã hoàn tiền');
+          const revenue = sellerOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+          const paid = sellerOrders.filter(o => (o.settlementStatus || 'pending') === 'settled').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+          const unpaid = revenue - paid;
+          return {
+            id: u.id,
+            username: u.username,
+            name: u.name || u.username,
+            contact: u.contact || '',
+            wallet: Number(u.wallet) || 0,
+            createdAt: u.createdAt,
+            locked: !!u.locked,
+            sold: sellerOrders.length,
+            revenue,
+            paid,
+            unpaid,
+            orders: sellerOrders.map(o => ({ ...o, time: o.time || fmtTime(new Date(o.createdAt || 0)) }))
+          };
+        });
+        return send(res, 200, { ctvs });
+      }
+      if (p === '/api/admin/ctv/settle' && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập admin.' });
+        const actor = getAdminSessionUser(req) || getUser(req);
+        if (!actor || !isAdminUser(actor)) return send(res, 403, { error: 'Chỉ admin mới được tất toán CTV.' });
+        const body = await readBody(req);
+        const ctvId = Number(body.ctvId);
+        if (!Number.isFinite(ctvId)) return send(res, 400, { error: 'CTV không hợp lệ.' });
+        const selectedOrders = orders.filter(o => Number(o.sellerId) === ctvId && (o.settlementStatus || 'pending') !== 'settled');
+        const nextOrders = JSON.parse(JSON.stringify(orders));
+        nextOrders.forEach(order => {
+          if (Number(order.sellerId) === ctvId && (order.settlementStatus || 'pending') !== 'settled') {
+            order.settlementStatus = 'settled';
+            order.settledAt = new Date().toISOString();
+          }
+        });
+        orders = nextOrders;
+        commitState({ [ORDERS_FILE]: nextOrders });
+        return send(res, 200, { ok: true, settled: selectedOrders.length, total: selectedOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0) });
+      }
+      if (p === '/api/ctv/accounts' && req.method === 'GET') {
+        const user = getAdminSessionUser(req) || getUser(req);
+        if (!user || !isCTVUser(user)) return send(res, 401, { error: 'Cần đăng nhập CTV.' });
+        return send(res, 200, { accounts: accountRecords().filter(a => accountVisibleToUser(user, a)) });
+      }
+      if (p === '/api/ctv/revenue' && req.method === 'GET') {
+        const user = getAdminSessionUser(req) || getUser(req);
+        if (!user || !isCTVUser(user)) return send(res, 401, { error: 'Cần đăng nhập CTV.' });
+        const sellerOrders = orders.filter(o => Number(o.sellerId) === user.id);
+        const revenue = sellerOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const paid = sellerOrders.filter(o => (o.settlementStatus || 'pending') === 'settled').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const unpaid = revenue - paid;
+        return send(res, 200, { revenue, paid, unpaid, orders: sellerOrders.map(o => ({ ...o, time: o.time || fmtTime(new Date(o.createdAt || 0)) })) });
       }
       let m;
       if (p === '/api/admin/orders' && req.method === 'GET') {
@@ -1540,7 +1685,9 @@ async function handle(req, res) {
       }
       if (p === '/api/store' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
-        return send(res, 200, { data: { ...store, acc: accountsDb } });
+        const actor = getAdminSessionUser(req) || getUser(req);
+        const visibleAccounts = actor && isCTVUser(actor) ? (accountRecords().filter(a => accountVisibleToUser(actor, a))) : accountRecords();
+        return send(res, 200, { data: { ...store, acc: { ...accountsDb, listed: visibleAccounts } } });
       }
       if (p === '/api/store' && req.method === 'DELETE') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
@@ -1569,6 +1716,22 @@ async function handle(req, res) {
         if (!('value' in b)) return send(res, 400, { error: 'Thiếu value.' });
         if (k === 'acc') {
           if (!b.value || typeof b.value !== 'object' || Array.isArray(b.value) || !Array.isArray(b.value.listed)) return send(res, 400, { error: 'Dữ liệu kho tài khoản không hợp lệ.' });
+          const actor = getAdminSessionUser(req) || getUser(req);
+          if (actor && isCTVUser(actor)) {
+            const allAccounts = (Array.isArray(b.value.listed) ? b.value.listed : []).concat(Array.isArray(b.value.added) ? b.value.added : []);
+            const invalid = allAccounts.some(account => account && String(account.sellerId || account.ownerId || actor.id) !== String(actor.id));
+            if (invalid) return send(res, 403, { error: 'CTV chỉ được quản lý acc do chính mình đăng lên.' });
+            const nextValue = JSON.parse(JSON.stringify(b.value));
+            [...(nextValue.listed || []), ...(nextValue.added || [])].forEach(account => {
+              if (account && account.id) {
+                account.sellerId = String(actor.id);
+                account.ownerId = String(actor.id);
+              }
+            });
+            commitState({ [ACCOUNTS_FILE]: nextValue });
+            accountsDb = nextValue;
+            return send(res, 200, { ok: true });
+          }
           commitState({ [ACCOUNTS_FILE]: b.value });
           accountsDb = b.value;
           return send(res, 200, { ok: true });
