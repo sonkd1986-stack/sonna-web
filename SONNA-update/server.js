@@ -1046,7 +1046,11 @@ async function handle(req, res) {
         const body = await readBody(req);
         const imageUrl = await saveDataUrl(String(body.dataUrl || ''));
         if (!imageUrl) return send(res, 400, { error: 'Ảnh không hợp lệ hoặc vượt quá 8 MB (JPG, PNG, WebP, GIF).' });
-        return send(res, 201, { url: imageUrl });
+        const imageName = path.basename(new URL(imageUrl).pathname);
+        if (!/^[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(imageName)) {
+          throw new Error('Supabase Storage returned an unexpected community image URL.');
+        }
+        return send(res, 201, { url: `/uploads/${imageName}` });
       }
       if (p === '/api/community/chat' && (req.method === 'GET' || req.method === 'POST')) {
         const user = getUser(req);
