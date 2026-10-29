@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>SONNA Admin</title>
+<link rel="icon" type="image/svg+xml" href="/sonna-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#14202b;--mut:#64748b;--line:#e2e8ee;--ac:#0e7c86;--acs:#e0f2f3;--acb:#fff;--ok:#15803d;--oks:#dcfce7;--warn:#b45309;--warns:#fef3c7;--bad:#be123c;--bads:#ffe4ea;--info:#0369a1;--infos:#e0f2fe;--pur:#7e22ce;--purs:#f3e8ff;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#2a0808;--card:#3b0e0e;--ink:#ffd84d;--mut:#d9b04a;--line:#5e1c1c;--ac:#ffc933;--acs:#5b1a12;--acb:#3b0e0e;--ok:#9be8a8;--oks:#17361f;--warn:#ffd84d;--warns:#5a3a0a;--bad:#ff8f84;--bads:#6e1717;--info:#8fd3ff;--infos:#16324a;--pur:#e0b3ff;--purs:#3e1b4f;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#2a0808;--card:#3b0e0e;--ink:#ffd84d;--mut:#d9b04a;--line:#5e1c1c;--ac:#ffc933;--acs:#5b1a12;--acb:#3b0e0e;--ok:#9be8a8;--oks:#17361f;--warn:#ffd84d;--warns:#5a3a0a;--bad:#ff8f84;--bads:#6e1717;--info:#8fd3ff;--infos:#16324a;--pur:#e0b3ff;--purs:#3e1b4f;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font:14px/1.5 "Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.app{display:flex;min-height:100vh}
+.side{width:224px;background:var(--card);border-right:1px solid var(--line);padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px;flex:none;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:4px 8px 16px;white-space:nowrap}
+.brand img{width:30px;height:30px;flex:none}
+#nav{display:grid;gap:2px}
+.nav{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border:0;background:none;border-radius:9px;cursor:pointer;color:var(--mut);text-align:left;font-weight:500;text-decoration:none;white-space:nowrap}
+.nav:hover{background:var(--bg);color:var(--ink)}
+.nav.on{background:var(--acs);color:var(--ac);font-weight:600}
+.nav.bad{color:var(--bad)}
+.nav svg,.ib svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav .bd{margin-left:auto;background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;line-height:18px}
+.side .sp{flex:1;min-height:12px}
+.mini .side{width:66px}.mini .nav span,.mini .brand span,.mini .bd{display:none}
+.main{flex:1;min-width:0}
+.top{position:sticky;top:0;z-index:25;background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;padding:10px 20px}
+.ib{border:1px solid var(--line);background:var(--card);border-radius:9px;width:36px;height:36px;display:grid;place-items:center;cursor:pointer;flex:none;padding:0}
+.ib:hover{background:var(--bg)}
+.sr{flex:1;max-width:420px;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:8px 12px;outline:0}
+.sr:focus{border-color:var(--ac)}
+.av{margin-left:auto;display:flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.av i{width:32px;height:32px;border-radius:50%;background:var(--acs);color:var(--ac);display:grid;place-items:center;font-style:normal}
+.pg{padding:20px;max-width:1240px;margin:0 auto}
+h1{font-size:21px;margin:0}h3{margin:0 0 12px;font-size:15px}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}.hd .sp{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.mb12{margin-bottom:12px}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:12px}
+.kp .l{color:var(--mut);font-size:13px}.kp .v{font-size:23px;font-weight:700;margin-top:2px}.kp .s{font-size:12px;color:var(--mut)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.alert{display:flex;align-items:center;gap:12px;background:var(--warns);color:var(--warn);border-radius:12px;padding:12px 16px;margin-bottom:12px;font-weight:500;flex-wrap:wrap}
+.alert .sp{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 14px;cursor:pointer;font-weight:600;text-decoration:none;color:var(--ink);display:inline-block;white-space:nowrap}
+.btn:hover{background:var(--bg)}.btn:disabled{opacity:.5;cursor:default}
+.btn.p{background:var(--ac);border-color:var(--ac);color:var(--acb)}.btn.p:hover{opacity:.9}
+.btn.d{color:var(--bad)}
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;align-items:center;padding-bottom:2px}
+.tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 14px;cursor:pointer;white-space:nowrap;color:var(--mut);font-weight:500;flex:none}
+.tab.on{background:var(--ac);border-color:var(--ac);color:var(--acb)}
+.tab b{font-weight:600;opacity:.75;margin-left:4px}
+.tab i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.tabs .lk{flex:none;white-space:nowrap}
+.bulk{display:flex;gap:8px;align-items:center;background:var(--acs);color:var(--ac);padding:8px 12px;border-radius:10px;margin-bottom:12px;font-weight:600;flex-wrap:wrap}
+.bulk .btn{padding:5px 12px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+th{color:var(--mut);font-weight:600;font-size:13px;cursor:pointer;user-select:none}
+th.ns{cursor:default}
+td.wrap{white-space:normal;min-width:160px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--bg)}
+.pill{border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.ok{background:var(--oks);color:var(--ok)}.pill.warn{background:var(--warns);color:var(--warn)}.pill.bad{background:var(--bads);color:var(--bad)}.pill.mut{background:var(--bg);color:var(--mut)}.pill.info{background:var(--infos);color:var(--info)}.pill.pur{background:var(--purs);color:var(--pur)}
+.lk{border:0;background:none;color:var(--ac);cursor:pointer;font-weight:600;padding:2px 6px}.lk.bad{color:var(--bad)}.lk:hover{text-decoration:underline}.lk:disabled{opacity:.4;cursor:default;text-decoration:none}
+.pgr{display:flex;align-items:center;gap:6px;justify-content:flex-end;padding-top:12px;color:var(--mut);flex-wrap:wrap}
+.pgr .btn{padding:4px 10px}
+.em{text-align:center;color:var(--mut);padding:32px}
+.mut{color:var(--mut)}.small{font-size:12px}
+.act{list-style:none;margin:0;padding:0;display:grid;gap:10px}.act li{display:flex;gap:10px;justify-content:space-between}.act time{color:var(--mut);font-size:12px;flex:none}
+.fr{display:grid;gap:12px;max-width:560px}
+.fg{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+label{display:grid;gap:4px;font-weight:600;font-size:13px}
+.in{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 12px;outline:0;width:100%;min-width:0}.in:focus{border-color:var(--ac)}
+textarea.in{resize:vertical;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.sw{display:flex;align-items:center;gap:10px;font-weight:600}
+.lr{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.lr>span:last-child{color:var(--mut)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:20px;width:min(460px,calc(100vw - 32px));max-height:90vh;overflow:auto}
+dialog.wide{width:min(720px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(8,14,20,.55)}
+dialog form{margin:0}
+#db{display:grid;gap:12px}
+.ft{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+#toast{position:fixed;right:16px;bottom:16px;display:grid;gap:8px;z-index:60}
+.ti{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:360px}
+.ti.bad{background:var(--bad);color:#fff}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.gi img,.thumb{width:100%;height:80px;object-fit:cover;border-radius:8px;display:block;background:var(--bg)}
+.thumb{width:96px;height:44px;flex:none}
+.br{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.br .grow{flex:1;min-width:140px}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);padding:2px 6px;border-radius:6px}
+.sw-color{display:flex;height:34px;border-radius:8px;overflow:hidden}
+.sw-color span{flex:1}
+.preset{border:2px solid var(--line);background:var(--card);border-radius:12px;padding:12px;text-align:left;cursor:pointer;display:grid;gap:8px}
+.preset.on{border-color:var(--ac)}
+.login{min-height:100vh;display:grid;place-items:center;padding:24px}
+.login form{width:100%;max-width:380px;display:grid;gap:14px}
+.login h1{display:flex;align-items:center;gap:10px}.login h1 img{width:34px;height:34px}
+.err{color:var(--bad);font-size:13px;min-height:18px}
+.mb{display:none}
+@media(max-width:860px){
+.side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s;height:100%}
+.open .side{transform:none}.mini .side{width:224px}.mini .nav span,.mini .brand span{display:inline}
+.mb{display:grid}.dk{display:none}.g2{grid-template-columns:1fr}.pg{padding:14px}.top{padding:10px 14px}.av span{display:none}
+.scrim{position:fixed;inset:0;background:rgba(8,14,20,.5);z-index:15;display:none}.open .scrim{display:block}}
+</style>
+</head>
+<body>
+<div class="login" id="login" hidden>
+<form class="card" id="lf" autocomplete="off">
+<h1><img src="/sonna-mark.svg" alt="">SONNA Admin</h1>
+<label>Tên đăng nhập<input class="in" id="lu" type="text" autocomplete="username"></label>
+<label>Mật khẩu<input class="in" id="lp" type="password" autocomplete="current-password"></label>
+<div class="err" id="le" role="alert"></div>
+<button class="btn p" type="submit">Đăng nhập quản trị</button>
+<a class="mut small" href="/">← Về cửa hàng</a>
+</form>
+</div>
+<div class="app" id="app" hidden>
+<aside class="side" id="side" aria-label="Menu quản trị">
+<div class="brand"><img src="/sonna-mark.svg" alt=""><span>SONNA Admin</span></div>
+<nav id="nav"></nav>
+<div class="sp"></div>
+<button class="nav" type="button" data-a="theme"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg><span>Sáng / đỏ sẫm</span></button>
+<a class="nav" href="/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg><span>Xem cửa hàng</span></a>
+<button class="nav bad" type="button" data-a="logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Đăng xuất</span></button>
+</aside>
+<div class="scrim" data-a="menu"></div>
+<div class="main">
+<header class="top">
+<button class="ib mb" type="button" data-a="menu" aria-label="Mở menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<button class="ib dk" type="button" data-a="mini" aria-label="Thu gọn menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<input class="sr" id="gq" type="search" placeholder="Tìm trong trang hiện tại..." aria-label="Tìm kiếm">
+<button class="ib" type="button" data-a="refresh" aria-label="Làm mới dữ liệu" title="Làm mới dữ liệu"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-2.6-6.4L21 8M21 3v5h-5"/></svg></button>
+<div class="av"><span>Admin</span><i>A</i></div>
+</header>
+<main class="pg" id="main"></main>
+</div>
+</div>
+<dialog id="dlg"><form id="df"><h3 id="dt"></h3><div id="db"></div><div class="ft"><button class="btn" type="button" data-a="close" id="cancel">Hủy</button><button class="btn p" type="submit" id="ok">Lưu</button></div></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/admin.js"></script>
+<script src="/admin-views.js"></script>
+<script src="/admin-content.js"></script>
+</body>
+</html>

@@ -327,8 +327,11 @@
     '@media(max-width:768px){#root>div>main{padding:16px!important}#root>div>div[style*="max-width:1280px"]{padding:20px 16px!important}}' +
     '</style>';
 
+  // Trang quản trị mới nằm ở /admin.html; giao diện cũ vẫn mở được bằng /?old=1#AdminDashboard.
+  var OLD_ADMIN = /[?&]old=1(&|$)/.test(location.search);
   function go(k, hash) {
     if (!/^[A-Za-z0-9_]+$/.test(k) || !NAV.some(function (n) { return n.k === k; })) k = 'Store';
+    if (k.indexOf('Admin') === 0 && !OLD_ADMIN) { location.replace('/admin.html'); return; }
     if (k.indexOf('Admin') === 0 && !authed) { pending = k; cur = k; history.replaceState(null, '', '#' + k); showLogin(); return; }
     var ready = k === 'Store' ? refreshStore() : Promise.resolve();
     ready.then(function (ok) {
