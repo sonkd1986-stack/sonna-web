@@ -240,7 +240,17 @@ A.padd = () => openM('Thêm sản phẩm', fld('p_t', 'Tên sản phẩm', '') +
 // ---------- Cài đặt ----------
 VIEW.set = () => `<div class="hd"><h1>Cài đặt</h1></div>
 <div class="card fr mb12"><h3>Giao diện quản trị</h3><p style="margin:0">Chọn màu: <button class="btn" data-a="theme">Đổi Sáng / Đỏ sẫm</button></p><p class="mut small" style="margin:0">Giao diện quản trị cũ vẫn dùng được tại <a href="/?old=1#AdminDashboard">/?old=1#AdminDashboard</a> nếu cần tính năng chưa có ở đây.</p></div>
+<div class="card fr mb12"><h3>Kết nối nạp thẻ cào (Gạch Thẻ)</h3><p class="mut" style="margin:0">Lấy địa chỉ IP máy chủ để gửi Gạch Thẻ Auto cho phép, và thử xem máy chủ đã kết nối được tới Gạch Thẻ chưa.</p><div><button class="btn p" data-a="srvinfo">Lấy IP và thử kết nối</button></div><div id="srvinfo"></div></div>
 <div class="card fr"><h3 style="color:var(--bad)">Vùng nguy hiểm</h3><p class="mut" style="margin:0">Đặt lại dữ liệu cấu hình cửa hàng (banner, liên hệ, khuyến mãi, catalog...) về trống. Kho acc, khách hàng và đơn hàng không bị xóa.</p><div><button class="btn d" data-a="reset">Đặt lại dữ liệu cửa hàng</button></div></div>`;
+A.srvinfo = async () => {
+  const box = $('#srvinfo');
+  box.innerHTML = '<span class="mut">Đang kiểm tra (khoảng 5–10 giây)...</span>';
+  try {
+    const r = await must('GET', '/api/admin/server-info');
+    const ips = r.ips || [];
+    box.innerHTML = `<div>${lr('IP máy chủ', ips.length ? ips.map(ip => `<code>${esc(ip)}</code>`).join(' ') + ' ' + btn('ucp', ips.join(', '), 'Copy') : '<span style="color:var(--bad)">Không lấy được</span>')}${lr('Gạch Thẻ', pill(r.gachthe.ok ? 'ok' : 'bad', r.gachthe.ok ? 'Kết nối được' : 'Lỗi') + ' ' + esc(r.gachthe.message))}</div><p class="mut small" style="margin:6px 0 0">Bấm vài lần nếu cần: máy chủ có thể gọi ra từ nhiều IP khác nhau, hãy gửi Gạch Thẻ tất cả IP đã thấy.</p>`;
+  } catch (e) { box.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+};
 A.reset = () => openM('Đặt lại dữ liệu cửa hàng', '<p style="margin:0">Thao tác này không thể hoàn tác. Gõ <b>DAT LAI</b> để xác nhận.</p>' + fld('r_c', 'Xác nhận', ''), async () => {
   if (val('r_c') !== 'DAT LAI') { toast('Gõ đúng DAT LAI để xác nhận', true); return false; }
   await must('DELETE', '/api/store');

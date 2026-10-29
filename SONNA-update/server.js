@@ -1148,6 +1148,27 @@ async function handle(req, res) {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         return send(res, 200, { deposits: deposits.slice().reverse() });
       }
+      // IP máy chủ gọi ra ngoài (để nhà cung cấp thẻ cho phép) và thử kết nối Gạch Thẻ.
+      if (p === '/api/admin/server-info' && req.method === 'GET') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
+        const ips = new Set();
+        for (let i = 0; i < 4; i++) {
+          try { const r = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 }); if (r.data && r.data.ip) ips.add(String(r.data.ip)); } catch (error) {}
+        }
+        let gachthe;
+        if (!gachTheReady()) gachthe = { ok: false, message: 'Chưa cấu hình GACHTHE_PARTNER_KEY.' };
+        else {
+          try {
+            const cfg = gachTheCfg(), requestId = crypto.randomBytes(16).toString('hex');
+            const r = await callGachThe({ request_id: requestId, partner_id: cfg.partnerId, sign: gachTheCheckSign(requestId, cfg.partnerId, cfg.partnerKey), command: 'check' });
+            gachthe = { ok: true, message: 'Kết nối được. Gạch Thẻ trả lời: status=' + r.status + (r.message ? ', ' + String(r.message).slice(0, 80) : '') };
+          } catch (error) {
+            const status = error && error.response && error.response.status;
+            gachthe = { ok: false, message: status ? 'Gạch Thẻ từ chối kết nối (HTTP ' + status + ')' + (status === 403 ? ': cần cho phép IP máy chủ.' : '.') : 'Không kết nối được: ' + error.message };
+          }
+        }
+        return send(res, 200, { ips: [...ips], gachthe });
+      }
       // Admin hủy thẻ cào đang treo (ví dụ nhà cung cấp chặn kết nối): khách hết bị kẹt và được gửi lại đúng thẻ đó.
       if (p === '/api/admin/deposits/cancel' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
