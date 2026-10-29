@@ -505,8 +505,19 @@ async function reconcilePendingCards() {
       try {
         const checked = await checkGachTheCard(txn);
         const status = Number(checked.status);
-        if (status === 99) continue;
-        if (String(checked.request_id || '') !== txn.requestId) continue;
+        const label = '[SONNA] Gạch Thẻ: thẻ chờ ' + txn.requestId.slice(0, 8) + ' (gửi lúc ' + txn.time + ')';
+        if (status === 99) { console.log(label + ' → nhà cung cấp vẫn đang xử lý (99).'); continue; }
+        if (String(checked.request_id || '') !== txn.requestId) {
+          const message = String(checked.message || checked.msg || '');
+          // Nhà cung cấp không có giao dịch này: thẻ chưa từng được nhận, cho khách gửi lại.
+          if (/không tồn tại|khong ton tai|not[ _]?found|not[ _]?exist/i.test(message) && now - Date.parse(txn.time) > 10 * 60 * 1000) {
+            updateGachTheDeposit(txn.txId, { status: 'failed', notSubmitted: true, providerStatus: Number.isFinite(status) ? status : null, providerMessage: ('Nhà cung cấp không có giao dịch này: ' + message).slice(0, 160), updatedAt: new Date().toISOString() });
+            console.log(label + ' → nhà cung cấp không có giao dịch này; đánh dấu chưa gửi để khách gửi lại thẻ.');
+            continue;
+          }
+          console.warn(label + ' → phản hồi không khớp hoặc lỗi: status=' + checked.status + ', message=' + message.slice(0, 120));
+          continue;
+        }
         const code = String(checked.code || ''), serial = String(checked.serial || '');
         if (!code || !serial) {
           if ([2, 3, 4, 100].includes(status)) {
@@ -1464,7 +1475,8 @@ async function handle(req, res) {
         }
         const cfg = gachTheCfg();
         const fingerprint = cardFingerprint(code, serial, telco, cfg.partnerKey);
-        if (deposits.some(deposit => deposit.type === 'gachthe' && sameHex(deposit.cardFingerprint, fingerprint))) {
+        // Thẻ từng bị nhà cung cấp từ chối kết nối (chưa thực sự gửi đi) thì được gửi lại.
+        if (deposits.some(deposit => deposit.type === 'gachthe' && !deposit.notSubmitted && sameHex(deposit.cardFingerprint, fingerprint))) {
           return send(res, 409, { error: 'Thẻ này đã được gửi trước đó. Không gửi lại thẻ.' });
         }
         const now = Date.now();
@@ -1526,6 +1538,17 @@ async function handle(req, res) {
             message: 'Thẻ đang được kiểm tra. Không gửi lại cùng thẻ khi giao dịch đang xử lý.'
           });
         } catch (error) {
+          // Nhà cung cấp trả lỗi 4xx ngay (ví dụ 403 do chưa cho phép IP máy chủ): thẻ chưa được nhận, không để treo.
+          const httpStatus = error && error.response && error.response.status;
+          if (httpStatus >= 400 && httpStatus < 500) {
+            updateGachTheDeposit(txn.txId, {
+              status: 'failed', notSubmitted: true, providerStatus: null,
+              providerMessage: 'Nhà cung cấp từ chối kết nối (HTTP ' + httpStatus + '), thẻ chưa được gửi.',
+              updatedAt: new Date().toISOString()
+            });
+            console.error('[SONNA] Gạch Thẻ từ chối kết nối khi gửi thẻ (HTTP ' + httpStatus + '): kiểm tra danh sách IP cho phép của merchant.', requestId.slice(0, 8));
+            return send(res, 502, { error: 'Chưa gửi được thẻ tới nhà cung cấp (lỗi ' + httpStatus + '). Thẻ chưa bị trừ; vui lòng thử lại sau hoặc liên hệ hỗ trợ.' });
+          }
           console.error('[SONNA] Gạch Thẻ request outcome is unknown; awaiting provider callback:', requestId, error.message);
           return send(res, 202, {
             ok: true, requestId, status: 'pending',
