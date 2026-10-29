@@ -1642,9 +1642,11 @@ async function handle(req, res) {
       if (p === '/api/ctv/revenue' && req.method === 'GET') {
         const user = getAdminSessionUser(req) || getUser(req);
         if (!user || !isCTVUser(user)) return send(res, 401, { error: 'Cần đăng nhập CTV.' });
+        // Đơn đã hoàn tiền không tính vào doanh thu CTV, giống cách tính ở trang CTV của admin.
         const sellerOrders = orders.filter(o => Number(o.sellerId) === user.id);
-        const revenue = sellerOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-        const paid = sellerOrders.filter(o => (o.settlementStatus || 'pending') === 'settled').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const counted = sellerOrders.filter(o => o.status !== 'Đã hoàn tiền');
+        const revenue = counted.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const paid = counted.filter(o => (o.settlementStatus || 'pending') === 'settled').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
         const unpaid = revenue - paid;
         return send(res, 200, { revenue, paid, unpaid, orders: sellerOrders.map(o => ({ ...o, time: o.time || fmtTime(new Date(o.createdAt || 0)) })) });
       }

@@ -202,10 +202,10 @@ IC.rev = 'M4 20V10M10 20V4M16 20v-7M22 20H2';
 LOAD.rev = async () => { D.rev = await must('GET', '/api/ctv/revenue'); };
 VIEW.rev = () => {
   const r = D.rev || {}, orders = (r.orders || []).slice().reverse();
-  const rows = orders.filter(o => matchQ(o, ['code', 'title'])).map(o => ({ ...o, settled: (o.settlementStatus || 'pending') === 'settled' }));
+  const rows = orders.filter(o => matchQ(o, ['code', 'title'])).map(o => ({ ...o, settled: (o.settlementStatus || 'pending') === 'settled', refunded: o.status === 'Đã hoàn tiền' }));
   return `<div class="hd"><h1>Doanh thu</h1></div>
-<div class="kp">${[['Doanh thu bán ra', fmt(r.revenue), orders.length + ' đơn'], ['Đã được thanh toán', fmt(r.paid), 'Admin đã tất toán'], ['Chờ thanh toán', fmt(r.unpaid), 'Admin sẽ chuyển khoản cho bạn']].map(k => `<div class="card"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('')}</div>
-${grid(rows, [['code', 'Mã đơn'], ['title', 'Sản phẩm'], ['total', 'Số tiền', o => fmt(o.total), o => Number(o.total)], ['time', 'Thời gian'], ['status', 'Đơn', o => sp(o.status)], ['settled', 'Thanh toán', o => o.settled ? pill('ok', 'Đã nhận') : pill('warn', 'Chờ thanh toán')]], { key: 'code', empty: 'Chưa bán được acc nào.' })}`;
+<div class="kp">${[['Doanh thu bán ra', fmt(r.revenue), orders.filter(o => o.status !== 'Đã hoàn tiền').length + ' đơn'], ['Đã được thanh toán', fmt(r.paid), 'Admin đã tất toán'], ['Chờ thanh toán', fmt(r.unpaid), 'Admin sẽ chuyển khoản cho bạn']].map(k => `<div class="card"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('')}</div>
+${grid(rows, [['code', 'Mã đơn'], ['title', 'Sản phẩm'], ['total', 'Số tiền', o => fmt(o.total), o => Number(o.total)], ['time', 'Thời gian'], ['status', 'Đơn', o => sp(o.status)], ['settled', 'Thanh toán', o => o.refunded ? pill('mut', 'Không tính (đã hoàn tiền)') : o.settled ? pill('ok', 'Đã nhận') : pill('warn', 'Chờ thanh toán')]], { key: 'code', empty: 'Chưa bán được acc nào.' })}`;
 };
 
 // ---------- Sản phẩm (bảng products trên PostgreSQL) ----------
