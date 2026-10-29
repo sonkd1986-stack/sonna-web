@@ -1085,9 +1085,17 @@ async function handle(req, res) {
       // ----- webhook SePay (tiền vào tài khoản -> cộng ví) -----
       if (p === '/api/webhook/sepay' && req.method === 'POST') {
         const raw = await readRaw(req);
-        if (!verifySepay(req, raw)) return send(res, 401, { success: false });
-        let payload; try { payload = JSON.parse(raw); } catch (e) { return send(res, 400, { success: false }); }
+        // Nhật ký để đối chiếu với SePay khi tiền không vào ví (không ghi khóa hay nội dung bí mật).
+        if (!verifySepay(req, raw)) {
+          const auth = String(req.headers['authorization'] || '');
+          const c = payCfg().sepay || {};
+          console.warn('[SONNA] SePay webhook bị từ chối (401): ' + (auth ? (auth.startsWith('Apikey ') ? 'khóa API không khớp với SONNA_SEPAY_API_KEY' : 'header Authorization sai dạng') : (req.headers['x-sepay-signature'] ? 'chữ ký HMAC không khớp' : 'không có khóa xác thực')) +
+            ' | máy chủ có apiKey=' + !!c.apiKey + ', hmac=' + !!c.hmacSecret);
+          return send(res, 401, { success: false });
+        }
+        let payload; try { payload = JSON.parse(raw); } catch (e) { console.warn('[SONNA] SePay webhook: nội dung không phải JSON (400).'); return send(res, 400, { success: false }); }
         const result = handleSepay(payload);
+        console.log('[SONNA] SePay webhook: giao dịch ' + payload.id + ', ' + payload.transferAmount + 'đ, nội dung "' + String(payload.content || '').slice(0, 60) + '" → ' + result.result + (result.reason ? ' (' + result.reason + ')' : ''));
         return send(res, 200, Object.assign({ success: true }, result));
       }
       if (p === '/api/admin/deposits' && req.method === 'GET') {
