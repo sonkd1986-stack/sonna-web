@@ -21,51 +21,109 @@
 <meta name="twitter:description" content="SONNA Game Account Store - cửa hàng tài khoản Dragon Ball Legends. Khám phá kho acc và hướng dẫn mua hàng.">
 <meta name="twitter:image" content="https://sonna.vip/sonna-share-v3.png">
 <link rel="icon" type="image/svg+xml" href="/sonna-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-html,body{margin:0;height:100%;background:#0F1320;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#EAEFFA}
-body{display:flex;flex-direction:column}
-#bar{flex:none;background:#171C2B;border-bottom:1px solid #2B3248;padding:6px 10px;display:none;flex-wrap:wrap;gap:6px 12px;align-items:center}
-.grp{display:flex;flex-wrap:wrap;align-items:center;gap:3px}
-.grp b{font-size:11px;letter-spacing:.08em;color:#A3ACC4;margin-right:4px}
-button{min-height:32px;padding:0 10px;border-radius:8px;border:1px solid #2B3248;background:transparent;color:#EAEFFA;font:inherit;font-size:13px;cursor:pointer}
-button[aria-current="page"]{background:#FF8A1F;color:#1A1206;border-color:#FF8A1F;font-weight:600}
-button:focus-visible{outline:2px solid #52C7FF;outline-offset:2px}
-#note{margin-left:auto;font-size:12px;color:#A3ACC4}
-#bar[data-page^="Admin"] #resetData,#bar[data-page^="Admin"] #note{display:none}
+:root{--bg:#f3f5f7;--card:#fff;--sf:#eef2f5;--ink:#14202b;--mut:#64748b;--line:#e2e8ee;--ac:#0e7c86;--acs:#e0f2f3;--acb:#fff;--ok:#15803d;--warn:#b45309;--bad:#be123c;--bads:#ffe4ea;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#2a0808;--card:#3b0e0e;--sf:#4a1414;--ink:#ffd84d;--mut:#d9b04a;--line:#5e1c1c;--ac:#ffc933;--acs:#5b1a12;--acb:#3b0e0e;--ok:#9be8a8;--warn:#ffd84d;--bad:#ff8f84;--bads:#6e1717;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#2a0808;--card:#3b0e0e;--sf:#4a1414;--ink:#ffd84d;--mut:#d9b04a;--line:#5e1c1c;--ac:#ffc933;--acs:#5b1a12;--acb:#3b0e0e;--ok:#9be8a8;--warn:#ffd84d;--bad:#ff8f84;--bads:#6e1717;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0F1320;font:14px/1.5 "Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;color:#EAEFFA}
+body.adm{background:var(--bg);color:var(--ink)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.app{display:flex;height:100%;height:100dvh}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.side,.top,.scrim{display:none}
+.adm .side{width:224px;background:var(--card);border-right:1px solid var(--line);padding:16px 12px;height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:4px;flex:none;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:4px 8px 16px;white-space:nowrap}
+.brand img{width:30px;height:30px;flex:none}
+#nav{display:grid;gap:2px}
+.nav{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border:0;background:none;border-radius:9px;color:var(--mut);text-align:left;font-weight:500;text-decoration:none;white-space:nowrap}
+.nav:hover{background:var(--bg);color:var(--ink)}
+.nav.on{background:var(--acs);color:var(--ac);font-weight:600}
+.nav.bad{color:var(--bad)}.nav.bad:hover{background:var(--bads)}
+.nav svg,.ib svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side .sp{flex:1;min-height:12px}
+.mini .side{width:66px}.mini .nav span,.mini .brand span{display:none}
+.adm .top{display:flex;flex:none;background:var(--card);border-bottom:1px solid var(--line);gap:10px;align-items:center;padding:10px 20px;z-index:10}
+.ib{border:1px solid var(--line);background:var(--card);border-radius:9px;width:36px;height:36px;display:grid;place-items:center;flex:none;padding:0}
+.ib:hover{background:var(--bg)}
+.top h1{display:none;font-size:17px;margin:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .sp{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:7px 14px;font-weight:600;text-decoration:none;color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--bg)}
+.av{display:flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.av i{width:32px;height:32px;border-radius:50%;background:var(--acs);color:var(--ac);display:grid;place-items:center;font-style:normal}
+.mb{display:none}
+@media(max-width:860px){
+.adm .side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s}
+.open .side{transform:none}.mini .side{width:224px}.mini .nav span,.mini .brand span{display:inline}
+.mb{display:grid}.top h1{display:block}.dk,.top .btn,.av span{display:none}.adm .top{padding:10px 14px}
+.adm.open .scrim{display:block;position:fixed;inset:0;background:rgba(8,14,20,.5);z-index:15}}
+.adm #community-nav{display:none}
 #community-nav{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px;background:#24143d;border-bottom:1px solid #392653}
 #community-nav strong{margin-right:8px;color:#fff;font-size:14px;letter-spacing:.12em}
 #community-nav a{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 13px;border:1px solid #5a4670;border-radius:8px;color:#f6f0fc;text-decoration:none;font-size:13px;font-weight:600}
 #community-nav a:hover,#community-nav a:focus-visible{border-color:#ff8a1f;color:#ffc24b;outline:none}
 #community-nav .community-link{margin-left:auto;border-color:#ff8a1f;background:#ff8a1f;color:#24143d}
 #community-nav .community-link:hover,#community-nav .community-link:focus-visible{background:#ffc24b;color:#24143d}
-iframe{flex:1;border:0;width:100%;background:#0F1320}
-#login{flex:1;display:none;align-items:center;justify-content:center;padding:24px;background:#0F1320}
-#login form{width:100%;max-width:380px;background:#171C2B;border:1px solid #2B3248;border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:14px}
-#login h1{margin:0;font-size:28px;letter-spacing:.06em}
-#login label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:#A3ACC4}
-#login input{min-height:46px;padding:0 12px;border-radius:8px;border:1px solid #2B3248;background:#0F1320;color:#EAEFFA;font-size:16px;font-family:inherit}
-#login input:focus-visible{outline:2px solid #52C7FF;outline-offset:2px}
-#login .go{min-height:48px;border:0;border-radius:8px;background:#FF8A1F;color:#1A1206;font-size:16px;font-weight:700}
-#login .hint{font-size:13px;color:#A3ACC4}
-#login .err{font-size:14px;color:#FF9AA5}
+#community-nav .admin-link{display:none}
+.authed #community-nav .admin-link{display:inline-flex}
+iframe{flex:1;min-height:0;border:0;width:100%;background:#0F1320}
+.adm iframe{background:var(--bg)}
+body.lgn{background:var(--bg);color:var(--ink)}
+#login{flex:1;display:none;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:var(--ink)}
+#login form{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:14px}
+#login h1{margin:0;font-size:21px;display:flex;align-items:center;gap:10px}
+#login h1 img{width:34px;height:34px}
+#login label{display:grid;gap:4px;font-weight:600;font-size:13px}
+#login input{min-height:44px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:16px;outline:0}
+#login input:focus{border-color:var(--ac)}
+#login .go{min-height:44px;border:0;border-radius:9px;background:var(--ac);color:var(--acb);font-size:15px;font-weight:700}
+#login .go:hover{opacity:.9}
+#login .hint{font-size:12px;color:var(--mut)}
+#login .err{font-size:13px;color:var(--bad)}
 </style>
 </head>
 <body>
-<div id="bar" role="navigation" aria-label="Chọn màn hình"></div>
+<div class="app" id="app">
+<aside class="side" id="side" aria-label="Menu quản trị">
+<div class="brand"><img src="/sonna-mark.svg" alt=""><span>SONNA Admin</span></div>
+<nav id="nav"></nav>
+<div class="sp"></div>
+<button class="nav" type="button" id="themeBtn"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg><span>Sáng / đỏ sẫm</span></button>
+<a class="nav" href="#Store"><svg viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg><span>Xem cửa hàng</span></a>
+<button class="nav bad" type="button" id="resetData"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.7 2.8L3 8M3 3v5h5"/></svg><span>Đặt lại dữ liệu mẫu</span></button>
+<button class="nav bad" type="button" id="logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Đăng xuất</span></button>
+</aside>
+<div class="scrim" id="scrim"></div>
+<div class="main">
+<header class="top">
+<button class="ib mb" type="button" id="menuBtn" aria-label="Mở menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<button class="ib dk" type="button" id="miniBtn" aria-label="Thu gọn menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<h1 id="ttl"></h1>
+<span class="sp"></span>
+<a class="btn" href="#Store">Xem cửa hàng</a>
+<div class="av"><span>Admin</span><i>A</i></div>
+</header>
 <nav id="community-nav" aria-label="Điều hướng SONNA">
 <strong>SONNA</strong>
 <a href="#Store">Cửa hàng</a>
+<a class="admin-link" href="#AdminDashboard">Quản trị</a>
 <a class="community-link" href="/community.html">Diễn đàn &amp; Chợ thành viên</a>
 </nav>
 <iframe id="f" title="Màn hình thiết kế"></iframe>
 <div id="login"><form id="lf" autocomplete="off">
-<h1>SONNA ADMIN</h1>
+<h1><img src="/sonna-mark.svg" alt="">SONNA Admin</h1>
 <label>Tên đăng nhập<input id="lu" type="text" autocomplete="off"></label>
 <label>Mật khẩu<input id="lp" type="password" autocomplete="off"></label>
 <span id="le" class="err" role="alert"></span>
 <button class="go" type="submit">Đăng nhập quản trị</button>
 <span class="hint">Đăng nhập được kiểm tra ở máy chủ.</span>
 </form></div>
+</div>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

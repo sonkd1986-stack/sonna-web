@@ -8,9 +8,19 @@ var WHOLE=/^\s*\{\{([^}]+)\}\}\s*$/;
 function inner(str){var m=WHOLE.exec(str);return m?m[1]:str;}
 function interp(str,scope){return str.replace(/\{\{([^}]+)\}\}/g,function(_,e){var v=lookup(e,scope);return (v===undefined||v===null||typeof v==='function'||v===false&&false)?'':String(v);});}
 var BOOL={disabled:1,selected:1,checked:1,hidden:1,readonly:1,required:1};
+// Trang admin: đổi màu cố định cũ sang biến theme (P.theme = {hex: tên biến}); vùng data-raw giữ nguyên màu.
+var TM=P.theme||null,rawDepth=0,HEX=/#([0-9a-f]{6})([0-9a-f]{2})?(?![0-9a-z])/gi;
+function themed(s){
+ if(!TM||rawDepth||!s)return s;
+ s=s.replace(HEX,function(m,h,a){var t=TM[h.toUpperCase()];if(!t)return m;if(!a)return 'var(--'+t+')';
+  return 'color-mix(in srgb,var(--'+t+') '+Math.round(parseInt(a,16)/2.55)+'%,transparent)';});
+ if(TM.$)Object.keys(TM.$).forEach(function(k){s=s.split(k).join(TM.$[k]);});
+ return s;
+}
+if(TM)Array.prototype.forEach.call(document.querySelectorAll('head style'),function(st){st.textContent=themed(st.textContent);});
 function build(nodes,scope,out){
  for(var i=0;i<nodes.length;i++){var n=nodes[i];
-  if(n.nodeType===3){out.appendChild(document.createTextNode(interp(n.data,scope)));continue;}
+  if(n.nodeType===3){var tx=interp(n.data,scope);out.appendChild(document.createTextNode(out.nodeName==='STYLE'?themed(tx):tx));continue;}
   if(n.nodeType!==1) continue;
   if(n.tagName==='TEMPLATE'&&n.getAttribute('data-tag')){
    var tag=n.getAttribute('data-tag');
@@ -30,7 +40,10 @@ function build(nodes,scope,out){
    if(BOOL[name]){if(raw&&raw!=='false')el.setAttribute(name,'');else el.removeAttribute(name);return;}
    el.setAttribute(name,(raw===undefined||raw===null)?'':String(raw));
   });
+  var isRaw=TM&&n.hasAttribute('data-raw');if(isRaw)rawDepth++;
+  if(TM&&!rawDepth)['style','fill','stroke'].forEach(function(a){if(el.hasAttribute(a))el.setAttribute(a,themed(el.getAttribute(a)));});
   build(n.childNodes,scope,el);
+  if(isRaw)rawDepth--;
   if((el.tagName==='SELECT'||el.tagName==='TEXTAREA')&&el.hasAttribute('value'))el.value=el.getAttribute('value');
   out.appendChild(el);
  }
