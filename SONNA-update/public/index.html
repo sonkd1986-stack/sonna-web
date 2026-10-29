@@ -70,7 +70,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 #community-nav .community-link:hover,#community-nav .community-link:focus-visible{background:#ffc24b;color:#24143d}
 #community-nav .admin-link{display:none}
 .authed #community-nav .admin-link{display:inline-flex}
-iframe{flex:1;min-height:0;border:0;width:100%;background:#0F1320}
+iframe{flex:1;min-height:0;border:0;width:100%;background:var(--shell-bg,#0F1320)}
+body:not(.adm):not(.lgn){background:var(--shell-bg,#0F1320)}
+#theme-preview{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:100;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);padding:10px 16px;border-radius:12px;background:#14202b;color:#fff;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+#theme-preview a{color:#ffd84d;font-weight:700}
 .adm iframe{background:var(--bg)}
 body.lgn{background:var(--bg);color:var(--ink)}
 #login{flex:1;display:none;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:var(--ink)}
@@ -124,6 +127,7 @@ body.lgn{background:var(--bg);color:var(--ink)}
 </form></div>
 </div>
 </div>
+<script src="store-skins.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

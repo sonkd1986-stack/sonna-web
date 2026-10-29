@@ -2,6 +2,28 @@
   var MEM = {}, authed = false, pending = 'Store', cur = 'Store', NAV = [], PAGES = {};
   var timers = {}, storeWrites = {}, publicStoreSnapshot = null, liveStateSnapshot = null, adminStoreSnapshot = null, storeRefreshBusy = false, realtimeRefreshAt = 0;
   var realtimeClientLoading = false, realtimeClient = null;
+  var BUILD = (document.querySelector('meta[name="sonna-build"]') || {}).content || '';
+  // Xem thử giao diện: /?theme=neon chỉ đổi trên máy người đang xem, không lưu.
+  var previewId = (/[?&]theme=([a-z]+)/.exec(location.search) || [])[1];
+  if (previewId && window.SONNA_SKINS && window.SONNA_SKINS.THEMES[previewId]) {
+    window.SONNA_THEME_PREVIEW = window.SONNA_SKINS.themeValue(previewId);
+    var pv = document.createElement('div');
+    pv.id = 'theme-preview';
+    pv.innerHTML = '<span></span><a href="/">Thoát xem thử</a>';
+    pv.firstChild.textContent = 'Đang xem thử giao diện “' + window.SONNA_THEME_PREVIEW.name + '”. Khách chưa thấy giao diện này.';
+    document.body.appendChild(pv);
+  }
+  // Thanh trên cùng và nền khung đổi theo giao diện cửa hàng.
+  function applyShellTheme(t) {
+    var hex = function (v) { return /^#[0-9a-f]{6}$/i.test(v || ''); };
+    var nav = document.getElementById('community-nav');
+    if (!nav || !t || !hex(t.deep)) return;
+    nav.style.background = t.deep;
+    nav.style.borderBottomColor = hex(t.primary) ? t.primary : '';
+    var link = nav.querySelector('.community-link');
+    if (link && hex(t.accent)) { link.style.background = t.accent; link.style.borderColor = t.accent; link.style.color = '#1A1206'; }
+    if (hex(t.pageBg)) document.documentElement.style.setProperty('--shell-bg', t.pageBg);
+  }
 
   function api(method, url, body) {
     return fetch(url, {
@@ -126,6 +148,7 @@
       return changed;
     }).then(function (changed) {
       if (!changed) return;
+      if (cur === 'Store') applyShellTheme(window.SONNA_THEME_PREVIEW || MEM.brandTheme);
       if (f.contentWindow && typeof f.contentWindow.SONNA_REFRESH === 'function') {
         f.contentWindow.SONNA_REFRESH();
       }
@@ -263,7 +286,9 @@
 
   function loadPage(k) {
     if (PAGES[k]) return Promise.resolve(PAGES[k]);
-    return api('GET', '/api/pages/' + encodeURIComponent(k)).then(function (p) {
+    // Trang khách có mã phiên bản nên trình duyệt được giữ lại; trang admin luôn tải mới.
+    var v = BUILD && k.indexOf('Admin') !== 0 ? '?v=' + encodeURIComponent(BUILD) : '';
+    return api('GET', '/api/pages/' + encodeURIComponent(k) + v).then(function (p) {
       if (p._status === 401) return null;
       if (p._status !== 200) return undefined;
       PAGES[k] = p; return p;
@@ -343,7 +368,9 @@
     if (!/^[A-Za-z0-9_]+$/.test(k) || !NAV.some(function (n) { return n.k === k; })) k = 'Store';
     if (k.indexOf('Admin') === 0 && !OLD_ADMIN) { location.replace('/admin.html'); return; }
     if (k.indexOf('Admin') === 0 && !authed) { pending = k; cur = k; history.replaceState(null, '', '#' + k); showLogin(); return; }
-    var ready = k === 'Store' ? refreshStore() : Promise.resolve();
+    // Lần mở trang đầu tiên vừa lấy /api/session xong, không cần gọi lại.
+    var ready = k === 'Store' && !skipFirstRefresh ? refreshStore() : Promise.resolve();
+    skipFirstRefresh = false;
     ready.then(function (ok) {
       if (ok === null) return null;
       return loadPage(k);
@@ -359,6 +386,7 @@
       f.srcdoc = '<!doctype html><html lang="vi"' + theme + '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
         mobileFix + (isAdmin ? adminCompact : '') + p.helmet + (isAdmin ? adminTheme : '') + (k === 'Store' ? storeMobileFix : '') + '</head><body><div id="root"></div><script>window.__PAGE=' +
         JSON.stringify(page).replace(/<\//g, '<\\/') + ';<\/script><script>' + RUNTIME + '<\/script></body></html>';
+      if (k === 'Store') applyShellTheme(window.SONNA_THEME_PREVIEW || MEM.brandTheme);
       if (location.hash !== '#' + k) history.replaceState(null, '', '#' + k);
     });
   }
@@ -378,14 +406,19 @@
   });
   window.addEventListener('message', function (e) { if (e.data && e.data.go) go(e.data.go, e.data.hash); });
   window.addEventListener('hashchange', function () { go(location.hash.slice(1), ''); });
-  window.setInterval(refreshLiveState, 10000);
+  // Realtime là đường chính; kiểm tra định kỳ chỉ để dự phòng khi mất kết nối realtime.
+  window.setInterval(refreshLiveState, 30000);
 
+  var skipFirstRefresh = true, firstPage = location.hash.slice(1) || 'Store';
+  // Tải song song: phiên, runtime và giao diện cửa hàng, thay vì lần lượt từng cái.
   Promise.all([
     api('GET', '/api/session'),
-    fetch('/runtime.js').then(function (r) { return r.text(); })
+    fetch('/runtime.js' + (BUILD ? '?v=' + encodeURIComponent(BUILD) : '')).then(function (r) { return r.text(); }),
+    firstPage === 'Store' ? loadPage('Store') : null
   ]).then(function (res) {
     var s = res[0]; RUNTIME = res[1]; NAV = s.nav || [];
-    setupSupabaseRealtime(s.realtime);
+    // Thư viện realtime 200 KB: tải sau khi trang đã hiện để không tranh băng thông.
+    setTimeout(function () { setupSupabaseRealtime(s.realtime); }, 2500);
     buildNav();
     hydrateStore(s).then(function (ok) {
       if (!ok) { pending = location.hash.slice(1) || 'Store'; showLogin(); return; }

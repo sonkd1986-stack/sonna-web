@@ -297,6 +297,8 @@ function publicSales(limit) {
 function publicStore() {
   const data = { ...store };
   delete data.acc;
+  // adm_* là dữ liệu mẫu của bản thiết kế admin cũ; không gửi cho khách.
+  Object.keys(data).forEach(key => { if (key.startsWith('adm_')) delete data[key]; });
   const display = data.salesDisplay && typeof data.salesDisplay === 'object' ? data.salesDisplay : {};
   const requestedSalesLimit = Math.floor(Number(display.limit) || 6);
   const salesLimit = [3, 6, 9, 12].includes(requestedSalesLimit) ? requestedSalesLimit : 6;
@@ -1009,6 +1011,8 @@ function readRaw(req) {
 }
 function readBody(req) { return readRaw(req).then(t => (t ? JSON.parse(t) : {})); }
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+// Mã phiên bản tài nguyên tĩnh: đổi mỗi lần máy chủ khởi động (mỗi lần deploy).
+const BUILD = Date.now().toString(36);
 const SUPABASE_BROWSER_SDK = path.join(ROOT, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 
 // ---------- Router ----------
@@ -1768,7 +1772,9 @@ async function handle(req, res) {
         const k = m[1];
         if (!PAGE_KEYS.has(k)) return send(res, 404, { error: 'Không có trang.' });
         if (k.startsWith('Admin') && !isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
-        return send(res, 200, readJSON(path.join(PAGES_DIR, k + '.json'), {}));
+        // Trang khách chỉ đổi khi deploy: link có ?v=<BUILD> thì cho giữ lâu, không thì giữ 5 phút.
+        const pageCache = k.startsWith('Admin') ? undefined : { 'Cache-Control': url.searchParams.get('v') === BUILD ? 'public, max-age=31536000, immutable' : 'public, max-age=300' };
+        return send(res, 200, readJSON(path.join(PAGES_DIR, k + '.json'), {}), pageCache);
       }
       if (p === '/api/admin/upload' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
@@ -1863,7 +1869,17 @@ async function handle(req, res) {
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    const ext = path.extname(file);
+    if (ext === '.html') {
+      // Gắn ?v=<BUILD> vào file js/css/svg nội bộ để trình duyệt và Cloudflare giữ lâu; deploy mới thì BUILD đổi.
+      const html = buf.toString('utf8')
+        .replace(/<head>/i, `<head><meta name="sonna-build" content="${BUILD}">`)
+        .replace(/(\s(?:src|href)=")(\/?[\w./-]+\.(?:js|css|svg))"/g, (m, attr, ref) => `${attr}${ref}?v=${BUILD}"`);
+      res.writeHead(200, { 'Content-Type': MIME[ext], 'Cache-Control': 'no-cache' });
+      return res.end(html);
+    }
+    const cache = url.searchParams.get('v') === BUILD ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache });
     res.end(buf);
   });
 }

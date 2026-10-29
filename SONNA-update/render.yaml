@@ -3,6 +3,8 @@ services:
     name: sonna
     runtime: node
     plan: starter
+    # Singapore gần khách Việt Nam và gần Supabase (Tokyo) nhất.
+    region: singapore
     buildCommand: npm install
     startCommand: npm start
     envVars:
@@ -19,4 +21,22 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SONNA_BANK_NAME
+        sync: false
+      - key: SONNA_BANK_SHORT_NAME
+        sync: false
+      - key: SONNA_BANK_ACCOUNT_NUMBER
+        sync: false
+      - key: SONNA_BANK_VA_NUMBER
+        sync: false
+      - key: SONNA_BANK_ACCOUNT_NAME
+        sync: false
+      - key: SONNA_PAYMENT_CONTENT_PREFIX
+        sync: false
+      - key: SONNA_SEPAY_API_KEY
+        sync: false
+      - key: GACHTHE_PARTNER_ID
+        sync: false
+      - key: GACHTHE_PARTNER_KEY
         sync: false
