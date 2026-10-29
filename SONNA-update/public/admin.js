@@ -377,7 +377,8 @@ ${d.unmatchedDeposits ? `<div class="alert"><span>${d.unmatchedDeposits} giao d�
 A.trash = async () => { await go('acc'); S.tab = 'trash'; S.cat = ''; S.sub = ''; render(); };
 
 // ---------- Tài khoản ----------
-LOAD.acc = async () => { await loadStore(); if (!D.users) loadUsers().then(() => S.v === 'acc' && render()).catch(() => {}); };
+// Danh sách khách chỉ để hiện tên người mua; tải nền để không làm chậm trang.
+LOAD.acc = async () => { await loadStore(); loadUsers().then(() => S.v === 'acc' && !$('#dlg').open && render()).catch(() => {}); };
 const accTabs = () => S.cat === 'promo'
   ? [['all', 'Tất cả'], ['ok', 'Trong kho'], ['sold', 'Đã tặng'], ['hide', 'Ẩn / nháp'], ['trash', 'Thùng rác']]
   : [['all', 'Tất cả'], ['ok', 'Đang bán'], ['sold', 'Đã bán'], ['hide', 'Ẩn / nháp'], ['trash', 'Thùng rác']];
@@ -394,12 +395,17 @@ const accRowsAll = M => M.merged.filter(r => hasCred(r) || r.del || r.tk);
 function folderBar(M) {
   const stockOf = c => M.merged.filter(r => !r.del && r.cat === c.id && (c.id === 'promo' ? r.status === 'Trong kho' : r.status === 'Đang bán') && hasCred(r)).length;
   const cur = M.byId[S.cat];
-  let h = `<div class="tabs"><button type="button" class="tab ${S.cat ? '' : 'on'}" data-a="fcat" data-id="">Tất cả danh mục</button>${M.cats.map(c => `<button type="button" class="tab ${S.cat === c.id ? 'on' : ''}" data-a="fcat" data-id="${esc(c.id)}"><i style="background:${esc(c.col)}"></i>${esc(c.label)}<b>${stockOf(c)}</b></button>`).join('')}<button type="button" class="lk" data-a="fadd">+ Danh mục</button>${cur && cur.custom ? `<button type="button" class="lk bad" data-a="fdel" data-id="${esc(cur.id)}">Xóa danh mục</button>` : ''}</div>`;
+  // Chip xuống dòng thay vì cuộn ngang; nút thao tác nằm ngay trên đầu mỗi hàng nên luôn nhìn thấy.
+  const chip = (a, id, on, html) => `<button type="button" class="tab ${on ? 'on' : ''}" data-a="${a}" data-id="${esc(id)}">${html}</button>`;
+  let h = `<div class="card mb12"><div class="fbh"><span class="fbl">Danh mục</span><span class="sp"></span>${cur && cur.custom ? btn('fdel', cur.id, 'Xóa danh mục', 'bad') : ''}${btn('fadd', '', '+ Danh mục')}</div>
+<div class="chips">${chip('fcat', '', !S.cat, 'Tất cả')}${M.cats.map(c => chip('fcat', c.id, S.cat === c.id, `<i style="background:${esc(c.col)}"></i>${esc(c.label)}<b>${stockOf(c)}</b>`)).join('')}</div>`;
   if (cur) {
     const subs = M.subsOf(cur.id), s = M.subById[S.sub];
-    h += `<div class="tabs"><button type="button" class="tab ${S.sub ? '' : 'on'}" data-a="fsub" data-id="">Tất cả thư mục con</button>${subs.map(x => `<button type="button" class="tab ${S.sub === x.id ? 'on' : ''}" data-a="fsub" data-id="${esc(x.id)}">${esc(x.title || '(chưa đặt tên)')}${x.price ? ' · ' + esc(x.price) + 'đ' : ''}<b>${x.stock}${cur.id === 'promo' ? '/' + x.given : ''}</b></button>`).join('')}<button type="button" class="lk" data-a="sadd">+ Thư mục con</button>${s ? `${btn('sedit', s.id, 'Sửa thư mục con')}${btn('simg', s.id, 'Ảnh (' + s.pics.length + ')')}${btn('sdel', s.id, 'Xóa thư mục con', 'bad')}` : ''}</div>`;
+    const price = x => num(x.price) ? ' · ' + fmt(num(x.price)) : '';
+    h += `<div class="fbh fsep"><span class="fbl">Thư mục con${s ? ': <b>' + esc(s.title || '(chưa đặt tên)') + '</b>' + esc(price(s)) : ' trong ' + esc(cur.label)}</span><span class="sp"></span>${s ? btn('sedit', s.id, 'Sửa tên / giá') + btn('simg', s.id, 'Ảnh (' + s.pics.length + ')') + btn('sdel', s.id, 'Xóa', 'bad') : ''}${btn('sadd', '', '+ Thư mục con')}</div>
+<div class="chips">${chip('fsub', '', !S.sub, 'Tất cả')}${subs.map(x => chip('fsub', x.id, S.sub === x.id, `${esc(x.title || '(chưa đặt tên)')}<span class="cp">${esc(price(x))}</span><b>${x.stock}${cur.id === 'promo' ? '/' + x.given : ''}</b>`)).join('') || '<span class="mut small">Chưa có thư mục con. Bấm “+ Thư mục con” để tạo.</span>'}</div>`;
   }
-  return h;
+  return h + '</div>';
 }
 function lookupCard(M) {
   const q = S.q.trim().toLowerCase();

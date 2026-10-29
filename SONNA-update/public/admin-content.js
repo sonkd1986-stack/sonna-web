@@ -122,20 +122,23 @@ const DEF_BANNERS = [
 const DEF_MARQ = 'Nạp ví hôm nay nhận thêm 5% giá trị nạp\nAcc được admin đăng nhập kiểm tra trước khi đăng bán\nHỗ trợ qua Zalo trong giờ làm việc';
 const CONTACT = [['phone', 'Hotline'], ['facebook', 'Facebook'], ['zalo', 'Zalo cá nhân'], ['fanpage', 'Fanpage'], ['zgroup', 'Nhóm Zalo'], ['email', 'Email hỗ trợ'], ['youtube', 'Kênh YouTube']];
 const DEF_CONTACT = { phone: { v: '', on: true }, facebook: { v: '', on: true }, zalo: { v: '', on: true }, fanpage: { v: '', on: true }, zgroup: { v: '', on: true }, email: { v: '', on: false }, youtube: { v: '', on: false } };
+// Giao diện cửa hàng. Nút mua dùng chữ tối nên accent phải là màu sáng; accentLight là chữ nổi bật trên nền primary.
 const PRESETS = {
-  royal: { name: 'Tím SONNA', primary: '#2D0A3F', mid: '#3F1457', deep: '#220733', tint: '#F3E8F9', border: '#D9CFE6', footerMuted: '#B8A3CF', accent: '#FF8A1F', accentLight: '#FFC24B', text: '#FFFFFF' },
-  navy: { name: 'Navy hiện đại', primary: '#17334F', mid: '#294D70', deep: '#0C2033', tint: '#EAF2F8', border: '#D2E1EA', footerMuted: '#B5CBD8', accent: '#E6AD4F', accentLight: '#F0C56E', text: '#FFFFFF' },
-  emerald: { name: 'Emerald chuyên nghiệp', primary: '#0D5148', mid: '#1E6C61', deep: '#07352F', tint: '#E8F4F1', border: '#CFE5DF', footerMuted: '#B2D4CD', accent: '#D8A64B', accentLight: '#F0C56E', text: '#FFFFFF' },
-  dark: { name: 'Nền tối', primary: '#101826', mid: '#182335', deep: '#0A111C', tint: '#172333', border: '#334155', footerMuted: '#A8B3C4', accent: '#F4B942', accentLight: '#FFD56A', text: '#FFFFFF', pageBg: '#0B1018', surface: '#121A26', surfaceAlt: '#172231', bodyText: '#E7EDF5', mutedText: '#A8B3C4', borderColor: '#2B3647' }
+  royal: { name: 'Tím SONNA', desc: 'Giao diện mặc định: tím hoàng gia, điểm nhấn cam.', primary: '#2D0A3F', mid: '#3F1457', deep: '#220733', tint: '#F3E8F9', border: '#D9CFE6', footerMuted: '#B8A3CF', accent: '#FF8A1F', accentLight: '#FFC24B', text: '#FFFFFF', pageBg: '#F4F5FA', surface: '#FFFFFF', surfaceAlt: '#FCFBFE', bodyText: '#1B1530', mutedText: '#5A5470', borderColor: '#E3E1EC' },
+  galaxy: { name: 'Thiên hà xanh ngọc', desc: 'Xanh đêm sâu với điểm nhấn ngọc neon, hiện đại kiểu esports.', primary: '#121A3A', mid: '#1D2A5C', deep: '#0B1128', tint: '#E8ECFF', border: '#CDD5F5', footerMuted: '#A9B4E0', accent: '#2FD3BF', accentLight: '#7CF0E1', text: '#FFFFFF', pageBg: '#F2F4FB', surface: '#FFFFFF', surfaceAlt: '#F8F9FF', bodyText: '#141A33', mutedText: '#566084', borderColor: '#DDE2F2' },
+  gold: { name: 'Hắc kim', desc: 'Đen ấm phối vàng kim, sang trọng như cửa hàng cao cấp.', primary: '#18150F', mid: '#2B251B', deep: '#0F0D09', tint: '#FAF1DA', border: '#E8D9B0', footerMuted: '#BDAE86', accent: '#E8B84A', accentLight: '#F4D68C', text: '#FFFFFF', pageBg: '#F6F4EE', surface: '#FFFFFF', surfaceAlt: '#FCFAF5', bodyText: '#1E1A12', mutedText: '#6A6250', borderColor: '#E7E0CF' },
+  dragon: { name: 'Rồng lửa', desc: 'Đỏ thẫm và hổ phách, mạnh mẽ đúng chất Dragon Ball.', primary: '#781222', mid: '#931D2E', deep: '#470913', tint: '#FCEBEE', border: '#F2C8CF', footerMuted: '#E2A6AF', accent: '#FFB21F', accentLight: '#FFD37A', text: '#FFFFFF', pageBg: '#FAF5F4', surface: '#FFFFFF', surfaceAlt: '#FFFAF9', bodyText: '#2A1216', mutedText: '#6D565A', borderColor: '#EEDDDF' }
 };
-function themeOf(id, color, accent) {
-  if (PRESETS[id]) return { id, ...PRESETS[id] };
-  const base = /^#[0-9a-f]{6}$/i.test(color || '') ? color : '#2D0A3F';
-  const mix = (hex, target, amount) => { const a = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)), b = [1, 3, 5].map(i => parseInt(target.slice(i, i + 2), 16)); return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * amount).toString(16).padStart(2, '0')).join('').toUpperCase(); };
-  const rgb = [1, 3, 5].map(i => parseInt(base.slice(i, i + 2), 16) / 255).map(v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-  const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-  return { id: 'custom', name: 'Màu tùy chỉnh', primary: base, mid: mix(base, '#FFFFFF', 0.14), deep: mix(base, '#000000', 0.2), tint: mix(base, '#FFFFFF', 0.93), border: mix(base, '#FFFFFF', 0.82), footerMuted: mix(base, '#FFFFFF', 0.76), accent: /^#[0-9a-f]{6}$/i.test(accent || '') ? accent : '#FF8A1F', accentLight: '#FFC24B', text: 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.052 ? '#FFFFFF' : '#1A1206', pageBg: '#F4F5FA', surface: '#FFFFFF', surfaceAlt: '#FCFBFE', bodyText: '#1B1530', mutedText: '#5A5470', borderColor: '#E3E1EC' };
+function themeOf(id) {
+  const { desc, ...colors } = PRESETS[id] || PRESETS.royal;
+  return { id: PRESETS[id] ? id : 'royal', ...colors };
 }
+// Cửa hàng thu nhỏ để xem trước giao diện.
+const themePreview = p => `<div class="tp" aria-hidden="true" style="background:${p.pageBg};color:${p.bodyText}">
+<div style="background:${p.primary};color:${p.text};padding:8px 10px;display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:16px;height:16px;border-radius:5px;background:${p.accent}"></span>SONNA<span style="flex:1"></span><span style="color:${p.accentLight};font-size:10px;letter-spacing:.08em">NẠP TIỀN</span><span style="font-size:10px;opacity:.85">LỊCH SỬ</span></div>
+<div style="background:${p.mid};height:18px;padding:0 10px;display:flex;align-items:center;gap:6px;font-size:9px;color:${p.text};opacity:.95">Thông báo · Nạp ví nhận thêm ưu đãi</div>
+<div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">${['Reroll iOS', 'Character'].map((t, i) => `<div style="background:${p.surface};border:1px solid ${p.borderColor};border-radius:8px;padding:8px;display:grid;gap:5px"><b style="font-size:11px">${t}</b><span style="color:${p.mutedText};font-size:10px">Còn ${i ? 6 : 18} acc</span><span style="justify-self:start;padding:1px 7px;border-radius:99px;background:${p.tint};color:${p.primary};font-size:10px;font-weight:600">${i ? '320.000₫' : '18.000₫'}</span><span style="background:${p.accent};color:#1A1206;border-radius:6px;padding:4px;text-align:center;font-weight:700;font-size:10px">MUA NGAY</span></div>`).join('')}</div>
+<div style="background:${p.deep};color:${p.footerMuted};padding:7px 10px;font-size:10px;display:flex;justify-content:space-between"><span>© SONNA</span><span>Hotline · Zalo</span></div></div>`;
 // Danh mục và gói cho tab Thứ tự hiển thị (giống trang Nội dung cũ).
 const ORDER_CATS = [{ id: 'ra', name: 'Reroll DBL Android' }, { id: 'ri', name: 'Reroll DBL iOS' }, { id: 'ca', name: 'Character + Chrono Android' }, { id: 'ci', name: 'Character + Chrono iOS' }, { id: 'tm', name: 'Team Meta' }];
 function orderData(C) {
@@ -163,10 +166,11 @@ VIEW.web = () => {
     const c = Object.assign(clone(DEF_CONTACT), s.contact || {});
     body = `<div class="card fr"><p class="mut" style="margin:0">Hiện ở chân trang cửa hàng. Hotline dùng số điện thoại; các kênh khác dùng link https://.</p>${CONTACT.map(([k, l]) => `<div style="display:flex;gap:10px;align-items:end"><div style="flex:1">${fld('ct_' + k, l, (c[k] || {}).v || '')}</div><label class="sw" style="padding-bottom:10px"><input type="checkbox" id="cto_${k}" ${(c[k] || {}).on !== false ? 'checked' : ''}> Hiện</label></div>`).join('')}${fld('ct_hours', 'Giờ hỗ trợ', typeof s.hours === 'string' ? s.hours : '08:00 - 22:00 hằng ngày')}<div><button class="btn p" data-a="wcontact">Lưu và đăng</button></div></div>`;
   } else if (t === 'theme') {
-    const cur = s.brandTheme || themeOf('royal');
-    body = `<div class="card"><p class="mut" style="margin:0 0 12px">Chọn bảng màu cho cửa hàng phía khách. Áp dụng ngay khi bấm chọn.</p><div class="gg" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${Object.keys(PRESETS).map(id => { const p = PRESETS[id]; return `<button type="button" class="preset ${cur.id === id ? 'on' : ''}" data-a="wtheme" data-id="${id}"><span class="sw-color"><span style="flex:2;background:${p.primary}"></span><span style="background:${p.mid}"></span><span style="background:${p.accent}"></span></span><b>${esc(p.name)}${cur.id === id ? ' · đang dùng' : ''}</b></button>`; }).join('')}</div>
-<div class="fr" style="margin-top:16px"><div style="display:flex;gap:12px;align-items:end"><label>Màu chủ đạo tùy chỉnh<input type="color" id="th_c" value="${esc(/^#[0-9a-f]{6}$/i.test(cur.primary || '') ? cur.primary : '#2D0A3F')}" style="width:64px;height:42px;border:1px solid var(--line);border-radius:8px;background:var(--bg)"></label><button class="btn" data-a="wthemec">Dùng màu này</button></div>
-<div style="border-radius:10px;overflow:hidden;border:1px solid var(--line)"><div style="padding:12px 16px;background:${esc(cur.primary)};color:${esc(cur.text)};font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>SONNA · GAME ACCOUNT STORE</span><span style="padding:5px 12px;background:${esc(cur.accent)};color:#1A1206;border-radius:7px">MUA NGAY</span></div><div style="padding:12px 16px;background:#F4F5FA;color:#1B1530">Xem trước màu menu và nút mua <span style="margin-left:8px;padding:3px 8px;border-radius:999px;background:${esc(cur.tint)};color:${esc(cur.primary)};font-weight:600">Acc nổi bật</span></div></div></div></div>`;
+    const curId = (s.brandTheme && s.brandTheme.id) || 'royal';
+    const known = !!PRESETS[curId];
+    body = `${known ? '' : `<div class="alert">Cửa hàng đang dùng bảng màu cũ “${esc((s.brandTheme && s.brandTheme.name) || curId)}” không còn trong danh sách. Chọn một giao diện bên dưới để thay.</div>`}
+<p class="mut" style="margin:0 0 12px">Chọn giao diện cho cửa hàng phía khách. Bấm <b>Áp dụng</b> là cửa hàng đổi màu ngay; có thể đổi lại bất cứ lúc nào.</p>
+<div class="gg" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${Object.keys(PRESETS).map(id => { const p = PRESETS[id], on = curId === id; return `<div class="tcard ${on ? 'on' : ''}">${themePreview(p)}<div><b>${esc(p.name)}</b>${id === 'royal' ? ' ' + pill('mut', 'Mặc định') : ''}${on ? ' ' + pill('ok', 'Đang dùng') : ''}<div class="mut small">${esc(p.desc)}</div></div>${on ? '<button class="btn" disabled>Đang áp dụng</button>' : `<button class="btn p" data-a="wtheme" data-id="${id}">Áp dụng</button>`}</div>`; }).join('')}</div>`;
   } else if (t === 'sales') {
     const sd = s.salesDisplay || { enabled: true, limit: 6 };
     body = `<div class="card fr"><label class="sw"><input type="checkbox" id="sd_on" ${sd.enabled !== false ? 'checked' : ''}> Hiện mục “Acc bán gần đây” trên cửa hàng</label>${selBox('sd_l', 'Số acc hiển thị', [3, 6, 9, 12].map(n => [n, n + ' acc']), [3, 6, 9, 12].includes(Number(sd.limit)) ? Number(sd.limit) : 6)}<p class="mut small" style="margin:0">Chỉ công khai tên sản phẩm, danh mục, ảnh và thời điểm bán; không công khai TK|MK hay thông tin khách.</p><div><button class="btn p" data-a="wsales">Lưu và đăng</button></div></div>`;
@@ -239,8 +243,7 @@ A.wcontact = async () => {
   await saveKey('contact', () => c);
   await saveWeb('hours', () => val('ct_hours'), 'Đã lưu thông tin liên hệ');
 };
-A.wtheme = id => saveWeb('brandTheme', () => themeOf(id), 'Đã đổi màu cửa hàng');
-A.wthemec = () => saveWeb('brandTheme', cur => themeOf('custom', $('#th_c').value, cur && cur.accent), 'Đã đổi màu cửa hàng');
+A.wtheme = id => saveWeb('brandTheme', () => themeOf(id), 'Cửa hàng đã chuyển sang giao diện ' + (PRESETS[id] || PRESETS.royal).name);
 A.wsales = () => saveWeb('salesDisplay', () => ({ enabled: chk('sd_on'), limit: Number(val('sd_l')) || 6 }), 'Đã lưu mục acc đã bán');
 const mvArr = (a, i, d) => { const j = i + d; if (i < 0 || j < 0 || j >= a.length) return a; a = a.slice(); [a[i], a[j]] = [a[j], a[i]]; return a; };
 A.wcmv = k => {
