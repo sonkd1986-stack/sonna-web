@@ -172,7 +172,7 @@ VIEW.web = () => {
       : T2.awarded ? `<p style="margin:0">${pill('ok', 'Đã trao')} ${fmt(T2.awarded.amount)} cho <b>${esc(T2.awarded.username)}</b> lúc ${esc(dt(T2.awarded.at))}</p>`
         : T2.rows[0] ? `<div><button class="btn p" data-a="wtopaward" data-id="${esc(T2.month)}">Trao thưởng Top 1: cộng ${fmt(T2.prizeAmount)} cho ${esc(T2.rows[0].username)}</button></div>`
           : '<p class="mut" style="margin:0">Tháng này không có ai nạp tiền.</p>';
-    body = `<div class="card fr mb12"><h3>Banner Top nạp trên trang chủ</h3><p class="mut" style="margin:0">Nằm dưới banner chính, tự cập nhật 5 người nạp nhiều nhất trong tháng (tiền chuyển khoản và mệnh giá thẻ cào, không tính thưởng nạp hay tiền cộng tay). Tên khách được che bớt, ví dụ <code>so***6</code>.</p>
+    body = `<div class="card fr mb12"><h3>Banner Top nạp trên trang chủ</h3><p class="mut" style="margin:0">Là một slide trong banner lớn (chạy sau các banner chính, mỗi slide 5 giây), tự cập nhật 5 người nạp nhiều nhất trong tháng (tiền chuyển khoản và mệnh giá thẻ cào, không tính thưởng nạp hay tiền cộng tay). Tên khách được che bớt, ví dụ <code>so***6</code>.</p>
 <label class="sw"><input type="checkbox" id="tp_on" ${c.enabled !== false ? 'checked' : ''}> Hiện banner Top nạp</label>
 ${fld('tp_title', 'Tiêu đề', c.title || 'TOP NẠP THÁNG')}${fld('tp_prize', 'Thưởng Top 1 mỗi tháng (đ)', prize, 'number', 'min="0"')}
 ${fld('tp_note', 'Dòng mô tả (để trống = tự ghi theo số tiền thưởng)', c.note || '', 'text', 'placeholder="Top 1 mỗi tháng nhận ' + fmt(prize) + ' vào tài khoản trên web"')}
