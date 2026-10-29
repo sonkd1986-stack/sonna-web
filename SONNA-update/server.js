@@ -491,6 +491,40 @@ async function handleGachTheCallback(payload) {
   deposits = nextDeposits;
   return { status: 200, body: { success: true, credited: true } };
 }
+// Thẻ đang chờ: chủ động hỏi Gạch Thẻ (lệnh check) mỗi phút thay vì chỉ chờ callback,
+// để thẻ không bị treo khi callback lỗi. Kết quả đi qua đúng các bước xác minh của callback.
+let reconcilingCards = false;
+async function reconcilePendingCards() {
+  if (reconcilingCards || !gachTheReady()) return;
+  reconcilingCards = true;
+  try {
+    const cfg = gachTheCfg(), now = Date.now();
+    const pending = deposits.filter(d => d.type === 'gachthe' && d.status === 'pending'
+      && now - Date.parse(d.time) > 60 * 1000 && now - Date.parse(d.time) < 48 * 3600 * 1000).slice(0, 10);
+    for (const txn of pending) {
+      try {
+        const checked = await checkGachTheCard(txn);
+        const status = Number(checked.status);
+        if (status === 99) continue;
+        if (String(checked.request_id || '') !== txn.requestId) continue;
+        const code = String(checked.code || ''), serial = String(checked.serial || '');
+        if (!code || !serial) {
+          if ([2, 3, 4, 100].includes(status)) {
+            updateGachTheDeposit(txn.txId, { status: 'failed', providerStatus: status, providerMessage: String(checked.message || '').slice(0, 160), updatedAt: new Date().toISOString() });
+            console.log('[SONNA] Gạch Thẻ: thẻ chờ ' + txn.requestId.slice(0, 8) + ' bị từ chối (mã ' + status + ').');
+          }
+          continue;
+        }
+        const result = await handleGachTheCallback({ request_id: txn.requestId, code, serial, telco: String(checked.telco || ''), callback_sign: gachTheCallbackSign(code, serial, cfg.partnerKey) });
+        console.log('[SONNA] Gạch Thẻ: tự kiểm tra thẻ chờ ' + txn.requestId.slice(0, 8) + ' → ' + JSON.stringify(result.body));
+      } catch (error) {
+        console.warn('[SONNA] Gạch Thẻ: chưa kiểm tra được thẻ chờ ' + txn.requestId.slice(0, 8) + ': ' + error.message);
+      }
+    }
+  } finally {
+    reconcilingCards = false;
+  }
+}
 function verifySepay(req, raw) {
   const c = payCfg().sepay || {};
   let ok = false;
@@ -1031,6 +1065,7 @@ async function handle(req, res) {
         return send(res, 400, { success: false });
       }
       const result = await handleGachTheCallback(payload);
+      console.log('[SONNA] Gạch Thẻ callback: yêu cầu ' + String(payload.request_id || '?').slice(0, 8) + ' → HTTP ' + result.status + ' ' + JSON.stringify(result.body));
       return send(res, result.status, result.body);
     } catch (error) {
       if (error instanceof SyntaxError) return send(res, 400, { success: false });
@@ -1972,6 +2007,7 @@ async function startServer() {
   }
   return handle(req, res);
   });
+  setInterval(() => { reconcilePendingCards().catch(error => console.error('[SONNA] Gạch Thẻ reconcile failed:', error)); }, 60 * 1000);
   server.listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log('[SONNA] Dữ liệu bền vững lưu trên Supabase PostgreSQL và Storage.'); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Cấu hình ngân hàng/SePay trong Admin > Thanh toán hoặc biến môi trường; hoặc chạy SIM_TOPUP=0 khi bán thật.');
   if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem Admin > Thanh toán và README.'); });
 }
