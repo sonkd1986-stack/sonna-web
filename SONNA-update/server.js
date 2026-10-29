@@ -1582,8 +1582,10 @@ async function handle(req, res) {
         }
         const cfg = gachTheCfg();
         const fingerprint = cardFingerprint(code, serial, telco, cfg.partnerKey);
-        // Thẻ từng bị nhà cung cấp từ chối kết nối (chưa thực sự gửi đi) thì được gửi lại.
-        if (deposits.some(deposit => deposit.type === 'gachthe' && !deposit.notSubmitted && sameHex(deposit.cardFingerprint, fingerprint))) {
+        // Chỉ chặn thẻ đang chờ, đã cộng tiền, chờ duyệt hoặc đã bị trừ sai mệnh giá (mã 2).
+        // Thẻ bị từ chối mà chưa bị trừ (sai IP, bảo trì, thẻ lỗi...) thì được gửi lại.
+        const cardUsed = deposit => !deposit.notSubmitted && (deposit.status !== 'failed' || Number(deposit.providerStatus) === 2);
+        if (deposits.some(deposit => deposit.type === 'gachthe' && cardUsed(deposit) && sameHex(deposit.cardFingerprint, fingerprint))) {
           return send(res, 409, { error: 'Thẻ này đã được gửi trước đó. Không gửi lại thẻ.' });
         }
         const now = Date.now();
@@ -1623,13 +1625,16 @@ async function handle(req, res) {
               .replace(/\s+/g, ' ')
               .trim()
               .slice(0, 160);
+            const cardConsumed = providerStatus === 2;
             updateGachTheDeposit(txn.txId, {
               status: 'failed', providerStatus,
               providerMessage,
+              ...(cardConsumed ? {} : { notSubmitted: true }),
               updatedAt: new Date().toISOString()
             });
+            console.log('[SONNA] Gạch Thẻ từ chối thẻ khi gửi (mã ' + providerStatus + '): ' + providerMessage, requestId.slice(0, 8));
             return send(res, 400, {
-              error: `Gạch Thẻ từ chối yêu cầu (mã ${Number.isFinite(providerStatus) ? providerStatus : 'không rõ'}).${providerMessage ? ' ' + providerMessage : ''} Không gửi lại thẻ này trước khi kiểm tra trạng thái.`,
+              error: `Gạch Thẻ từ chối yêu cầu (mã ${Number.isFinite(providerStatus) ? providerStatus : 'không rõ'}).${providerMessage ? ' ' + providerMessage : ''}${cardConsumed ? ' Thẻ đã bị trừ, vui lòng liên hệ hỗ trợ.' : ' Thẻ chưa bị trừ, có thể gửi lại sau.'}`,
               providerStatus: Number.isFinite(providerStatus) ? providerStatus : null,
               requestId
             });
