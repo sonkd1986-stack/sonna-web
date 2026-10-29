@@ -84,10 +84,20 @@
       return null;
     });
   }
+  // Tín hiệu đến dồn dập hoặc lúc đang tải thì hẹn một lần làm mới sau, không bỏ mất cập nhật.
+  var trailingRefresh = null, missedWhileHidden = false;
+  function scheduleTrailingRefresh(delay) {
+    if (trailingRefresh) return;
+    trailingRefresh = setTimeout(function () { trailingRefresh = null; refreshLiveState(); }, delay);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && missedWhileHidden) { missedWhileHidden = false; refreshLiveState(); }
+  });
   function refreshLiveState() {
-    if (document.hidden || storeRefreshBusy) return Promise.resolve();
+    if (document.hidden) { missedWhileHidden = true; return Promise.resolve(); }
+    if (storeRefreshBusy) { scheduleTrailingRefresh(1600); return Promise.resolve(); }
     var now = Date.now();
-    if (now - realtimeRefreshAt < 1500) return Promise.resolve();
+    if (now - realtimeRefreshAt < 1500) { scheduleTrailingRefresh(1500 - (now - realtimeRefreshAt) + 50); return Promise.resolve(); }
     realtimeRefreshAt = now;
     storeRefreshBusy = true;
     return api('GET', '/api/session').then(function (s) {

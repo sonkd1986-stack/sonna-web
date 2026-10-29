@@ -888,6 +888,88 @@ function isAuthed(req) {
   if (!exp || exp < Date.now()) { sessions.delete(t); adminSessionUsers.delete(t); return false; }
   return true;
 }
+// Vai trò của phiên quản trị: 'admin', 'ctv' hoặc null. Phiên cũ không có thông tin vai trò được tạo trước khi có CTV nên là admin.
+function sessionRole(req) {
+  if (!isAuthed(req)) return null;
+  const t = getToken(req);
+  const entry = adminSessionUsers.get(t);
+  if (!entry || entry.role === 'admin') return 'admin';
+  if (entry.role === 'ctv') {
+    const user = usersDb.users.find(u => String(u.id) === String(entry.id));
+    if (user && !user.locked && normalizeUserRole(user.role) === 'ctv') return 'ctv';
+  }
+  sessions.delete(t); adminSessionUsers.delete(t);
+  return null;
+}
+function dropAdminSessionsOf(userId) {
+  let changed = false;
+  adminSessionUsers.forEach((entry, token) => {
+    if (String(entry.id) === String(userId)) { adminSessionUsers.delete(token); sessions.delete(token); changed = true; }
+  });
+  if (changed) saveSessions();
+}
+// CTV chỉ được: xem/sửa acc của chính mình, tải ảnh, xem doanh thu của mình. Các API khách hàng dùng cookie riêng nên không bị ảnh hưởng.
+function ctvAllowed(p, method) {
+  if (p === '/api/session' || p === '/api/login' || p === '/api/logout') return true;
+  if (p.startsWith('/api/ctv/')) return true;
+  if (p === '/api/admin/upload') return method === 'POST';
+  if (p === '/api/store') return method === 'GET';
+  if (p === '/api/store/acc') return method === 'PUT';
+  if (p.startsWith('/api/pages/')) return true;
+  return !p.startsWith('/api/admin') && !p.startsWith('/api/store');
+}
+const CTV_STATUSES = ['Đang bán', 'Đã ẩn', 'Chờ kiểm tra', 'Nháp'];
+const CTV_FIELDS = ['tk', 'mk', 'title', 'info', 'price', 'cost', 'sub', 'note', 'level', 'chrono', 'chars', 'col', 'mkAt'];
+// Gộp thay đổi của CTV vào kho chung: chỉ sửa acc của chính CTV, không đụng acc khác, thư mục hay quy tắc.
+function mergeCtvAccounts(actor, value) {
+  const next = JSON.parse(JSON.stringify(accountsDb));
+  next.listed = Array.isArray(next.listed) ? next.listed : [];
+  next.ov = next.ov && typeof next.ov === 'object' ? next.ov : {};
+  next.accPics = next.accPics && typeof next.accPics === 'object' ? next.accPics : {};
+  const current = new Map(accountRecords().map(a => [String(a.id), a]));
+  const ownerOf = a => String(a.sellerId || a.ownerId || '');
+  const activeTk = new Set(accountRecords().filter(a => !a.del && a.tk).map(a => String(a.tk).toLowerCase()));
+  const incomingOv = value.ov && typeof value.ov === 'object' ? value.ov : {};
+  const pics = value.accPics && typeof value.accPics === 'object' ? value.accPics : {};
+  let changed = 0, skipped = 0;
+  (Array.isArray(value.listed) ? value.listed : []).forEach(raw => {
+    if (!raw || typeof raw !== 'object' || raw.id === undefined || raw.id === null) return;
+    const srcId = String(raw.id);
+    let id = srcId;
+    const a = { ...raw, ...(incomingOv[srcId] || {}) };
+    let cur = current.get(id);
+    if (cur && ownerOf(cur) !== String(actor.id)) {
+      // CTV không thấy acc người khác nên mã acc mới có thể trùng: cấp mã khác. Cùng tk nghĩa là cố sửa acc người khác: bỏ qua.
+      if (!a.tk || String(a.tk).toLowerCase() === String(cur.tk || '').toLowerCase()) return;
+      let n = 2;
+      while (current.has(srcId + '-' + n)) n++;
+      id = srcId + '-' + n;
+      cur = null;
+    }
+    if (cur) {
+      if (['Đã bán', 'Đã đặt giữ', 'Đã tặng'].includes(cur.status)) return;
+      const patch = {};
+      CTV_FIELDS.forEach(k => { if (a[k] !== undefined && a[k] !== cur[k]) patch[k] = a[k]; });
+      if (a.status !== undefined && a.status !== cur.status) { if (CTV_STATUSES.includes(a.status)) patch.status = a.status; else skipped++; }
+      if (typeof a.del === 'boolean' && a.del !== !!cur.del) patch.del = a.del;
+      if (patch.tk && activeTk.has(String(patch.tk).toLowerCase())) delete patch.tk;
+      if (Object.keys(patch).length) { next.ov[id] = { ...(next.ov[id] || {}), ...patch }; changed++; }
+      if (Array.isArray(pics[srcId])) { next.accPics[id] = pics[srcId].filter(u => typeof u === 'string').slice(0, 5); changed++; }
+      return;
+    }
+    // Acc mới do CTV đăng
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(id) || Object.prototype[id] !== undefined || !a.tk || !a.mk || a.del) return;
+    if (a.cat === 'promo' || !CTV_STATUSES.includes(a.status) || activeTk.has(String(a.tk).toLowerCase())) { skipped++; return; }
+    const row = { id, cat: String(a.cat || ''), sub: String(a.sub || ''), status: a.status, sellerId: String(actor.id), ownerId: String(actor.id), listedAt: a.listedAt || new Date().toLocaleString('vi-VN') };
+    CTV_FIELDS.forEach(k => { if (a[k] !== undefined) row[k] = a[k]; });
+    next.listed.push(row);
+    activeTk.add(String(a.tk).toLowerCase());
+    current.set(id, row);
+    if (Array.isArray(pics[srcId])) next.accPics[id] = pics[srcId].filter(u => typeof u === 'string').slice(0, 5);
+    changed++;
+  });
+  return { next, changed, skipped };
+}
 const fails = new Map(); // ip -> {n, until}
 function limited(ip) { const f = fails.get(ip); return f && f.n >= 5 && f.until > Date.now(); }
 const registrationAttempts = new Map();
@@ -955,9 +1037,12 @@ async function handle(req, res) {
 
   if (p.startsWith('/api/')) {
     try {
+      const role = sessionRole(req);
+      if (role === 'ctv' && !ctvAllowed(p, req.method)) return send(res, 403, { error: 'Tài khoản CTV không có quyền thực hiện thao tác này.' });
       if (p === '/api/session' && req.method === 'GET') {
         const cu = getUser(req);
-        return send(res, 200, { authed: isAuthed(req), nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), cardTopupReady: gachTheReady(), realtime: realtime.publicClientConfig() });
+        const staff = role === 'ctv' ? getAdminSessionUser(req) : null;
+        return send(res, 200, { authed: !!role, role, staff: staff ? { id: staff.id, username: staff.username, name: staff.name || staff.username } : null, nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), cardTopupReady: gachTheReady(), realtime: realtime.publicClientConfig() });
       }
       if (p === '/api/login' && req.method === 'POST') {
         if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
@@ -975,15 +1060,16 @@ async function handle(req, res) {
         const t = crypto.randomBytes(24).toString('hex');
         const exp = Date.now() + SESSION_MS;
         sessions.set(t, exp);
-        if (adminOk && !ctvUser) {
+        // Mật khẩu admin luôn cho phiên admin, kể cả khi có CTV trùng tên đăng nhập.
+        if (adminOk) {
           adminSessionUsers.set(t, { id: 'admin', role: 'admin', username: admin.username, exp });
-        }
-        if (ctvUser) {
+        } else {
+          if (ctvUser.locked) { sessions.delete(t); return send(res, 403, { error: 'Tài khoản CTV đã bị khóa.' }); }
           adminSessionUsers.set(t, { id: ctvUser.id, role: 'ctv', username: ctvUser.username, exp });
         }
         saveSessions();
         const secure = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
-        const userPayload = ctvUser ? publicUser(ctvUser) : { username: admin.username, role: 'admin' };
+        const userPayload = adminOk ? { username: admin.username, role: 'admin' } : publicUser(ctvUser);
         return send(res, 200, { ok: true, user: userPayload }, { 'Set-Cookie': `sid=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}` });
       }
       if (p === '/api/logout' && req.method === 'POST') {
@@ -1490,7 +1576,7 @@ async function handle(req, res) {
         const contact = String(body.contact || '').trim();
         if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) return send(res, 400, { error: 'Tên đăng nhập 3–30 ký tự: chữ, số, _ . -' });
         if (password.length < 6 || password.length > 100) return send(res, 400, { error: 'Mật khẩu cần từ 6 ký tự.' });
-        if (usersDb.users.some(u => u.username.toLowerCase() === username.toLowerCase())) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
+        if (usersDb.users.some(u => u.username.toLowerCase() === username.toLowerCase()) || username.toLowerCase() === String(admin.username).toLowerCase()) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
         const salt = crypto.randomBytes(16).toString('hex');
         const nextUsers = JSON.parse(JSON.stringify(usersDb));
         const user = {
@@ -1608,6 +1694,7 @@ async function handle(req, res) {
         if (nextUser.locked) {
           cSessions.forEach((entry, token) => { if (entry.id === nextUser.id) cSessions.delete(token); });
           saveSessions();
+          dropAdminSessionsOf(nextUser.id);
         }
         return send(res, 200, { ok: true, locked: nextUser.locked });
       }
@@ -1690,9 +1777,15 @@ async function handle(req, res) {
       }
       if (p === '/api/store' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
-        const actor = getAdminSessionUser(req) || getUser(req);
-        const visibleAccounts = actor && isCTVUser(actor) ? (accountRecords().filter(a => accountVisibleToUser(actor, a))) : accountRecords();
-        return send(res, 200, { data: { ...store, acc: { ...accountsDb, listed: visibleAccounts } } });
+        if (role === 'ctv') {
+          // CTV chỉ thấy acc của mình và catalog (để biết danh mục, thư mục con); không thấy cấu hình cửa hàng.
+          const actor = getAdminSessionUser(req);
+          const own = accountRecords().filter(a => accountVisibleToUser(actor, a) && !(accountsDb.added || []).some(x => x && x.id === a.id));
+          const ownIds = new Set(own.map(a => String(a.id)));
+          const accPics = Object.fromEntries(Object.entries(accountsDb.accPics || {}).filter(([id]) => ownIds.has(id)));
+          return send(res, 200, { data: { catalog: store.catalog || {}, acc: { listed: own, ov: {}, edits: accountsDb.edits || {}, added: accountsDb.added || [], subPics: accountsDb.subPics || {}, accPics, delSubs: accountsDb.delSubs || {}, rulesData: [] } } });
+        }
+        return send(res, 200, { data: { ...store, acc: { ...accountsDb, listed: accountRecords() } } });
       }
       if (p === '/api/store' && req.method === 'DELETE') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
@@ -1721,21 +1814,14 @@ async function handle(req, res) {
         if (!('value' in b)) return send(res, 400, { error: 'Thiếu value.' });
         if (k === 'acc') {
           if (!b.value || typeof b.value !== 'object' || Array.isArray(b.value) || !Array.isArray(b.value.listed)) return send(res, 400, { error: 'Dữ liệu kho tài khoản không hợp lệ.' });
-          const actor = getAdminSessionUser(req) || getUser(req);
-          if (actor && isCTVUser(actor)) {
-            const allAccounts = (Array.isArray(b.value.listed) ? b.value.listed : []).concat(Array.isArray(b.value.added) ? b.value.added : []);
-            const invalid = allAccounts.some(account => account && String(account.sellerId || account.ownerId || actor.id) !== String(actor.id));
-            if (invalid) return send(res, 403, { error: 'CTV chỉ được quản lý acc do chính mình đăng lên.' });
-            const nextValue = JSON.parse(JSON.stringify(b.value));
-            [...(nextValue.listed || []), ...(nextValue.added || [])].forEach(account => {
-              if (account && account.id) {
-                account.sellerId = String(actor.id);
-                account.ownerId = String(actor.id);
-              }
-            });
-            commitState({ [ACCOUNTS_FILE]: nextValue });
-            accountsDb = nextValue;
-            return send(res, 200, { ok: true });
+          if (role === 'ctv') {
+            // Trước đây bản CTV gửi lên ghi đè cả kho; giờ chỉ gộp acc của chính CTV vào kho chung.
+            const result = mergeCtvAccounts(getAdminSessionUser(req), b.value);
+            if (result.changed) {
+              commitState({ [ACCOUNTS_FILE]: result.next });
+              accountsDb = result.next;
+            }
+            return send(res, 200, { ok: true, changed: result.changed, skipped: result.skipped });
           }
           commitState({ [ACCOUNTS_FILE]: b.value });
           accountsDb = b.value;
@@ -1853,7 +1939,7 @@ async function startServer() {
     });
   }
   if (requestPath === '/api/products' || requestPath === '/api/db-test' || requestPath === '/products') {
-    if ((requestPath === '/api/db-test' || (requestPath === '/api/products' && req.method === 'POST')) && !isAuthed(req)) {
+    if ((requestPath === '/api/db-test' || (requestPath === '/api/products' && req.method === 'POST')) && sessionRole(req) !== 'admin') {
       return send(res, 401, { error: 'Cần đăng nhập admin.' });
     }
     return productApi(req, res);

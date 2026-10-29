@@ -57,6 +57,7 @@ async function saveKey(k, fn) {
   s[k] = v;
   return true;
 }
+const isCtv = () => !!(D.session && D.session.role === 'ctv');
 const uname = id => { const u = (D.users || []).find(x => String(x.id) === String(id)); return u ? u.username : (id ? '#' + id : ''); };
 
 // ---------- Kho acc: cùng cấu trúc dữ liệu với trang cũ ----------
@@ -154,7 +155,18 @@ async function mutateAcc(fn) {
   const catalog = clone(s.catalog || {}) || {};
   const r = fn(acc, catalog, model(acc, catalog));
   if (r === false) return false;
-  await must('PUT', '/api/store/acc', { value: acc });
+  const resp = await must('PUT', '/api/store/acc', { value: acc });
+  if (isCtv()) {
+    // CTV không thấy acc của người khác nên chỉ máy chủ biết tk nào trùng; lấy lại kho thật và báo số acc bị bỏ qua.
+    await loadStore();
+    const skipped = Number(resp.skipped) || 0;
+    if (skipped) {
+      toast('Máy chủ bỏ qua ' + skipped + ' acc: trùng tk với acc đã có trong kho hoặc trạng thái không hợp lệ.', true);
+      if (r && typeof r === 'object' && typeof r.ok === 'number') { r.ok = Math.max(0, r.ok - skipped); r.skip = (r.skip || 0) + skipped; }
+      if (r && typeof r === 'object' && typeof r.a === 'number') r.a = Math.max(0, r.a - skipped);
+    }
+    return r === undefined ? true : r; // catalog do admin quản lý
+  }
   const cat = buildCatalog(acc, catalog);
   await must('PUT', '/api/store/catalog', { value: cat });
   s.acc = acc; s.catalog = cat;
@@ -243,6 +255,7 @@ const IC = {
   ctv: 'M16 11a3 3 0 100-6 3 3 0 000 6zM3 20a7 7 0 0114 0M17 14a5 5 0 014 5', web: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
   products: 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8', set: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6'
 };
+const NAV_CTV = [['acc', 'Acc của tôi'], ['rev', 'Doanh thu']];
 const NAV = [['dash', 'Tổng quan'], ['acc', 'Tài khoản'], ['users', 'Người dùng'], ['deposits', 'Nạp tiền'], ['orders', 'Đơn hàng'], ['promo', 'Khuyến mãi'], ['ctv', 'CTV'], ['web', 'Nội dung web'], ['products', 'Sản phẩm'], ['set', 'Cài đặt']];
 const VIEW = {}, LOAD = {}, A = {};
 const STC = { 'Đang bán': 'ok', 'Trong kho': 'ok', 'Đã bán': 'mut', 'Đã tặng': 'pur', 'Đã đặt giữ': 'warn', 'Đã ẩn': 'mut', 'Chờ kiểm tra': 'info', 'Nháp': 'mut', 'Hoạt động': 'ok', 'Bị khóa': 'bad', 'Hoàn tất': 'ok', 'Đã thanh toán': 'info', 'Đang bàn giao': 'warn', 'Đã hoàn tiền': 'mut' };
@@ -288,7 +301,7 @@ const loadingHTML = '<div class="card em">Đang tải dữ liệu...</div>';
 function renderNav() {
   const { M } = D.store ? accCtx() : { M: null };
   const trash = M ? M.merged.filter(r => r.del && hasCred(r)).length : 0;
-  $('#nav').innerHTML = NAV.map(([k, l]) => `<button type="button" class="nav ${S.v === k ? 'on' : ''}" data-a="go" data-id="${k}"><svg viewBox="0 0 24 24"><path d="${IC[k]}"/></svg><span>${l}</span>${k === 'acc' && trash ? `<b class="bd">${trash}</b>` : ''}</button>`).join('');
+  $('#nav').innerHTML = (isCtv() ? NAV_CTV : NAV).map(([k, l]) => `<button type="button" class="nav ${S.v === k ? 'on' : ''}" data-a="go" data-id="${k}"><svg viewBox="0 0 24 24"><path d="${IC[k]}"/></svg><span>${l}</span>${k === 'acc' && trash ? `<b class="bd">${trash}</b>` : ''}</button>`).join('');
 }
 function render() {
   renderNav();
@@ -296,7 +309,7 @@ function render() {
   catch (e) { console.error(e); $('#main').innerHTML = `<div class="card em">Không hiển thị được trang này: ${esc(e.message)}</div>`; }
 }
 async function go(v) {
-  if (!VIEW[v]) v = 'dash';
+  if (isCtv() ? !NAV_CTV.some(n => n[0] === v) : !VIEW[v] || v === 'rev') v = isCtv() ? 'acc' : 'dash';
   Object.assign(S, { v, tab: 'all', pg: 1, sk: '', sd: 1, q: '', lp: null });
   S.sel.clear();
   $('#gq').value = '';
@@ -378,7 +391,7 @@ A.trash = async () => { await go('acc'); S.tab = 'trash'; S.cat = ''; S.sub = ''
 
 // ---------- Tài khoản ----------
 // Danh sách khách chỉ để hiện tên người mua; tải nền để không làm chậm trang.
-LOAD.acc = async () => { await loadStore(); loadUsers().then(() => S.v === 'acc' && !$('#dlg').open && render()).catch(() => {}); };
+LOAD.acc = async () => { await loadStore(); if (!isCtv()) loadUsers().then(() => S.v === 'acc' && !$('#dlg').open && render()).catch(() => {}); };
 const accTabs = () => S.cat === 'promo'
   ? [['all', 'Tất cả'], ['ok', 'Trong kho'], ['sold', 'Đã tặng'], ['hide', 'Ẩn / nháp'], ['trash', 'Thùng rác']]
   : [['all', 'Tất cả'], ['ok', 'Đang bán'], ['sold', 'Đã bán'], ['hide', 'Ẩn / nháp'], ['trash', 'Thùng rác']];
@@ -394,15 +407,16 @@ const inFolder = r => (!S.cat || r.cat === S.cat) && (!S.sub || r.sub === S.sub)
 const accRowsAll = M => M.merged.filter(r => hasCred(r) || r.del || r.tk);
 function folderBar(M) {
   const stockOf = c => M.merged.filter(r => !r.del && r.cat === c.id && (c.id === 'promo' ? r.status === 'Trong kho' : r.status === 'Đang bán') && hasCred(r)).length;
-  const cur = M.byId[S.cat];
+  const cur = M.byId[S.cat], ctv = isCtv();
+  const cats = ctv ? M.cats.filter(c => c.id !== 'promo') : M.cats;
   // Chip xuống dòng thay vì cuộn ngang; nút thao tác nằm ngay trên đầu mỗi hàng nên luôn nhìn thấy.
   const chip = (a, id, on, html) => `<button type="button" class="tab ${on ? 'on' : ''}" data-a="${a}" data-id="${esc(id)}">${html}</button>`;
-  let h = `<div class="card mb12"><div class="fbh"><span class="fbl">Danh mục</span><span class="sp"></span>${cur && cur.custom ? btn('fdel', cur.id, 'Xóa danh mục', 'bad') : ''}${btn('fadd', '', '+ Danh mục')}</div>
-<div class="chips">${chip('fcat', '', !S.cat, 'Tất cả')}${M.cats.map(c => chip('fcat', c.id, S.cat === c.id, `<i style="background:${esc(c.col)}"></i>${esc(c.label)}<b>${stockOf(c)}</b>`)).join('')}</div>`;
+  let h = `<div class="card mb12"><div class="fbh"><span class="fbl">Danh mục</span><span class="sp"></span>${ctv ? '' : (cur && cur.custom ? btn('fdel', cur.id, 'Xóa danh mục', 'bad') : '') + btn('fadd', '', '+ Danh mục')}</div>
+<div class="chips">${chip('fcat', '', !S.cat, 'Tất cả')}${cats.map(c => chip('fcat', c.id, S.cat === c.id, `<i style="background:${esc(c.col)}"></i>${esc(c.label)}<b>${stockOf(c)}</b>`)).join('')}</div>`;
   if (cur) {
     const subs = M.subsOf(cur.id), s = M.subById[S.sub];
     const price = x => num(x.price) ? ' · ' + fmt(num(x.price)) : '';
-    h += `<div class="fbh fsep"><span class="fbl">Thư mục con${s ? ': <b>' + esc(s.title || '(chưa đặt tên)') + '</b>' + esc(price(s)) : ' trong ' + esc(cur.label)}</span><span class="sp"></span>${s ? btn('sedit', s.id, 'Sửa tên / giá') + btn('simg', s.id, 'Ảnh (' + s.pics.length + ')') + btn('sdel', s.id, 'Xóa', 'bad') : ''}${btn('sadd', '', '+ Thư mục con')}</div>
+    h += `<div class="fbh fsep"><span class="fbl">Thư mục con${s ? ': <b>' + esc(s.title || '(chưa đặt tên)') + '</b>' + esc(price(s)) : ' trong ' + esc(cur.label)}</span><span class="sp"></span>${ctv ? '' : (s ? btn('sedit', s.id, 'Sửa tên / giá') + btn('simg', s.id, 'Ảnh (' + s.pics.length + ')') + btn('sdel', s.id, 'Xóa', 'bad') : '') + btn('sadd', '', '+ Thư mục con')}</div>
 <div class="chips">${chip('fsub', '', !S.sub, 'Tất cả')}${subs.map(x => chip('fsub', x.id, S.sub === x.id, `${esc(x.title || '(chưa đặt tên)')}<span class="cp">${esc(price(x))}</span><b>${x.stock}${cur.id === 'promo' ? '/' + x.given : ''}</b>`)).join('') || '<span class="mut small">Chưa có thư mục con. Bấm “+ Thư mục con” để tạo.</span>'}</div>`;
   }
   return h + '</div>';
@@ -430,10 +444,10 @@ VIEW.acc = () => {
   const tabs = accTabs();
   if (!tabs.some(t => t[0] === S.tab)) S.tab = 'all';
   const rows = base.filter(r => accTabMatch(r, S.tab) && matchQ(r, ['tk', 'id', 'mk', 'info', 'title']));
-  const n = S.sel.size, w = n ? n + ' đã chọn' : rows.length + ' trong danh sách', tr = S.tab === 'trash';
+  const n = S.sel.size, w = n ? n + ' đã chọn' : rows.length + ' trong danh sách', tr = S.tab === 'trash', ctv = isCtv();
   const bulk = `<div class="bulk">${w}<span style="flex:1"></span>${tr
-    ? '<button class="btn" data-a="bres">Khôi phục</button><button class="btn d" data-a="bpurge">Xóa vĩnh viễn</button>'
-    : `<button class="btn" data-a="bshow">Mở bán</button><button class="btn" data-a="bhide">Ẩn</button>${S.cat === 'promo' ? '' : '<button class="btn" data-a="bprice">Đổi giá</button><button class="btn" data-a="bgift">Chuyển kho quà</button>'}<button class="btn d" data-a="bdel">Xóa</button>`}</div>`;
+    ? '<button class="btn" data-a="bres">Khôi phục</button>' + (ctv ? '' : '<button class="btn d" data-a="bpurge">Xóa vĩnh viễn</button>')
+    : `<button class="btn" data-a="bshow">Mở bán</button><button class="btn" data-a="bhide">Ẩn</button>${S.cat === 'promo' ? '' : '<button class="btn" data-a="bprice">Đổi giá</button>' + (ctv ? '' : '<button class="btn" data-a="bgift">Chuyển kho quà</button>')}<button class="btn d" data-a="bdel">Xóa</button>`}</div>`;
   const lpRows = tr ? [] : rows;
   const sig = S.cat + '|' + S.sub + '|' + S.tab + '|' + S.q;
   const lpText = S.lp && S.lp.sig === sig ? S.lp.text : lpRows.map(x => x.tk + '|' + x.mk).join('\n');
@@ -446,9 +460,9 @@ VIEW.acc = () => {
     ['price', 'Giá', x => { const p = num(x.price), c = num(x.cost); return p ? fmt(p) + (c > p ? ` <span class="pill bad">-${Math.round((c - p) * 100 / c)}%</span>` : '') : esc(x.price || '—'); }, x => num(x.price)],
     ['status', 'Trạng thái', x => sp(x.status)]
   ];
-  const acts = x => x.del ? btn('restore', x.id, 'Khôi phục') + btn('purge', x.id, 'Xóa vĩnh viễn', 'bad')
+  const acts = x => x.del ? btn('restore', x.id, 'Khôi phục') + (ctv ? '' : btn('purge', x.id, 'Xóa vĩnh viễn', 'bad'))
     : btn('cp', x.id, 'Copy') + (LOCKED.includes(x.status) ? btn('view', x.id, 'Chi tiết') : btn('edit', x.id, 'Sửa') + btn('del', x.id, 'Xóa', 'bad'));
-  return `<div class="hd"><h1>Tài khoản</h1><span class="sp"></span><button class="btn" data-a="bulkadd">Thêm hàng loạt</button><button class="btn p" data-a="add">Thêm tài khoản</button></div>
+  return `<div class="hd"><h1>${ctv ? 'Acc của tôi' : 'Tài khoản'}</h1><span class="sp"></span><button class="btn" data-a="bulkadd">Thêm hàng loạt</button><button class="btn p" data-a="add">Thêm tài khoản</button></div>
 ${lookupCard(M)}${folderBar(M)}${tabsHTML(tabs.map(([k, l]) => [k, l, base.filter(r => accTabMatch(r, k)).length]), S.tab)}${bulk}${lp}${grid(rows, cols, { check: true, acts, empty: tr ? 'Thùng rác trống.' : 'Chưa có acc nào ở đây.' })}`;
 };
 A.fcat = id => { S.cat = id; S.sub = ''; S.pg = 1; S.sel.clear(); S.lp = null; render(); };
@@ -460,7 +474,7 @@ const subOpts = (M, cat) => M.subsOf(cat).map(s => [s.id, (s.title || '(chưa đ
 const statusOpts = cat => (cat === 'promo' ? ['Trong kho', 'Đã ẩn', 'Nháp'] : ['Đang bán', 'Đã ẩn', 'Chờ kiểm tra', 'Nháp']).map(s => [s, s]);
 function catPicker(M, cat, sub) {
   const subs = subOpts(M, cat);
-  return selBox('f_cat', 'Danh mục', M.cats.map(c => [c.id, c.label]), cat)
+  return selBox('f_cat', 'Danh mục', M.cats.filter(c => !isCtv() || c.id !== 'promo').map(c => [c.id, c.label]), cat)
     + `<div id="f_subw">${subs.length ? selBox('f_sub', 'Thư mục con', subs, sub) : '<input type="hidden" id="f_sub" value="">'}</div>`;
 }
 document.addEventListener('change', e => {
@@ -527,7 +541,7 @@ A.edit = id => {
   if (!r) return toast('Không tìm thấy acc ' + id, true);
   if (LOCKED.includes(r.status)) return A.view(id);
   const c = M.byId[r.cat] || {}, isChar = c.code === 'CI' || c.code === 'CA', subs = subOpts(M, r.cat);
-  openM('Sửa ' + r.id, `<div class="fg">${fld('e_id', 'Mã acc', r.id)}${fld('e_title', 'Tên sản phẩm', r.title || ('Acc #' + r.id))}</div>
+  openM('Sửa ' + r.id, `<div class="fg">${fld('e_id', 'Mã acc', r.id, 'text', isCtv() ? 'readonly' : '')}${fld('e_title', 'Tên sản phẩm', r.title || ('Acc #' + r.id))}</div>
 <div class="fg">${fld('e_tk', 'Tài khoản (tk)', r.tk)}${fld('e_mk', 'Mật khẩu (mk)', r.mk)}</div>
 ${subs.length ? selBox('e_sub', 'Thư mục con', subs, r.sub) : ''}
 ${r.cat === 'promo' ? '' : `<div class="fg">${fld('e_price', 'Giá bán (đ)', num(r.price) || '', 'number', 'min="0"')}${fld('e_cost', 'Giá gốc (đ)', num(r.cost) || '', 'number', 'min="0"')}</div>`}
@@ -835,12 +849,32 @@ $('#gq').addEventListener('input', e => {
 });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== S.v && VIEW[v]) go(v); });
 
-// Tự làm mới mỗi 20 giây khi không đang gõ hoặc mở hộp thoại.
-setInterval(() => {
+// Tự làm mới khi không đang gõ hoặc mở hộp thoại: ngay khi có tín hiệu realtime, và mỗi 20 giây để dự phòng.
+const LIVE_VIEWS = ['dash', 'acc', 'orders', 'deposits', 'users', 'ctv', 'rev'];
+let rtDirty = false;
+const canAutoRefresh = () => {
   const ae = document.activeElement;
-  if (document.hidden || $('#dlg').open || $('#app').hidden || (ae && ae.matches && ae.matches('input,textarea,select') && ae.id !== 'gq') || S.lp) return;
-  if (['dash', 'acc', 'orders', 'deposits', 'users', 'ctv'].includes(S.v)) refresh(false);
-}, 20000);
+  return !(document.hidden || $('#dlg').open || $('#app').hidden || (ae && ae.matches && ae.matches('input,textarea,select') && ae.id !== 'gq') || S.lp) && LIVE_VIEWS.includes(S.v);
+};
+setInterval(() => { if (canAutoRefresh()) { rtDirty = false; refresh(false); } }, 20000);
+setInterval(() => { if (rtDirty && canAutoRefresh()) { rtDirty = false; refresh(false); } }, 1500);
+// Supabase Broadcast chỉ mang thời điểm thay đổi, không mang dữ liệu; dữ liệu luôn lấy qua API có kiểm tra quyền.
+function setupRealtime(cfg) {
+  if (!cfg || !cfg.url || !cfg.key || setupRealtime.started) return;
+  setupRealtime.started = true;
+  const sc = document.createElement('script');
+  sc.src = '/vendor/supabase.js';
+  sc.onload = () => {
+    try {
+      const client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, realtime: { params: { eventsPerSecond: 5 } } });
+      client.channel('sonna:store-updates', { config: { broadcast: { self: false }, private: false } })
+        .on('broadcast', { event: 'store_changed' }, () => { rtDirty = true; })
+        .subscribe(st => { if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') console.warn('[SONNA admin] Realtime tạm mất kết nối, trang vẫn tự làm mới mỗi 20 giây.'); });
+    } catch (e) { console.warn('[SONNA admin] Không bật được realtime:', e); }
+  };
+  sc.onerror = () => console.warn('[SONNA admin] Không tải được thư viện realtime, trang vẫn tự làm mới mỗi 20 giây.');
+  document.head.append(sc);
+}
 
 function showLogin() { $('#app').hidden = true; $('#login').hidden = false; if ($('#dlg').open) $('#dlg').close(); setTimeout(() => $('#lu').focus(), 0); }
 $('#lf').addEventListener('submit', async e => {
@@ -858,6 +892,9 @@ async function boot() {
   D.session = s;
   if (!s.authed) return showLogin();
   $('#login').hidden = true; $('#app').hidden = false;
-  go(location.hash.slice(1) || 'dash');
+  const who = s.role === 'ctv' && s.staff ? s.staff.name : 'Admin';
+  $('.av').innerHTML = `<span>${esc(who)}${s.role === 'ctv' ? ' · CTV' : ''}</span><i>${esc(who.slice(0, 1).toUpperCase())}</i>`;
+  setupRealtime(s.realtime);
+  go(location.hash.slice(1) || (s.role === 'ctv' ? 'acc' : 'dash'));
 }
 window.addEventListener('DOMContentLoaded', boot);
