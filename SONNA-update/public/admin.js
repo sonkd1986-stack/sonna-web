@@ -416,7 +416,7 @@ function folderBar(M) {
   if (cur) {
     const subs = M.subsOf(cur.id), s = M.subById[S.sub];
     const price = x => num(x.price) ? ' · ' + fmt(num(x.price)) : '';
-    h += `<div class="fbh fsep"><span class="fbl">Thư mục con${s ? ': <b>' + esc(s.title || '(chưa đặt tên)') + '</b>' + esc(price(s)) : ' trong ' + esc(cur.label)}</span><span class="sp"></span>${ctv ? '' : (s ? btn('sedit', s.id, 'Sửa tên / giá') + btn('simg', s.id, 'Ảnh (' + s.pics.length + ')') + btn('sdel', s.id, 'Xóa', 'bad') : '') + btn('sadd', '', '+ Thư mục con')}</div>
+    h += `<div class="fbh fsep"><span class="fbl">Thư mục con${s ? ': <b>' + esc(s.title || '(chưa đặt tên)') + '</b><span class="fbp">' + esc(price(s)) + '</span>' : ' trong ' + esc(cur.label)}</span><span class="sp"></span>${ctv ? '' : (s ? btn('sedit', s.id, 'Sửa tên / giá') + btn('simg', s.id, 'Ảnh (' + s.pics.length + ')') + btn('sdel', s.id, 'Xóa', 'bad') : '') + btn('sadd', '', '+ Thư mục con')}</div>
 <div class="chips">${chip('fsub', '', !S.sub, 'Tất cả')}${subs.map(x => chip('fsub', x.id, S.sub === x.id, `${esc(x.title || '(chưa đặt tên)')}<span class="cp">${esc(price(x))}</span><b>${x.stock}${cur.id === 'promo' ? '/' + x.given : ''}</b>`)).join('') || '<span class="mut small">Chưa có thư mục con. Bấm “+ Thư mục con” để tạo.</span>'}</div>`;
   }
   return h + '</div>';
