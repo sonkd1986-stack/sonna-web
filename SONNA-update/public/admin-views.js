@@ -74,9 +74,11 @@ LOAD.deposits = async () => {
   D.deposits = d.deposits || []; D.session = s;
   if (!D.users) await loadUsers().catch(() => {});
 };
-const depSt = d => d.status === 'credited' ? ['ok', 'Đã cộng ví'] : d.status === 'unmatched' ? ['warn', 'Chưa khớp khách'] : d.status === 'ignored' ? ['bad', 'Bỏ qua: ' + (d.reason || 'không hợp lệ')] : ['mut', d.status || 'Không rõ'];
+const depSt = d => d.status === 'credited' ? ['ok', 'Đã cộng ví'] : d.status === 'unmatched' ? ['warn', 'Chưa khớp khách'] : d.status === 'ignored' ? ['bad', 'Bỏ qua: ' + (d.reason || 'không hợp lệ')]
+  : d.status === 'pending' ? ['warn', 'Đang chờ nhà cung cấp'] : d.status === 'failed' ? ['bad', d.notSubmitted ? 'Chưa gửi được, khách gửi lại được' : 'Thẻ bị từ chối' + (d.providerMessage ? ': ' + d.providerMessage : '')]
+  : d.status === 'review' ? ['warn', 'Cần admin kiểm tra'] : ['mut', d.status || 'Không rõ'];
 VIEW.deposits = () => {
-  const all = (D.deposits || []).map((d, i) => ({ ...d, _k: String(d.txId || d.id || i), _t: d.bankTime || d.time || '' }));
+  const all = (D.deposits || []).map((d, i) => ({ ...d, _k: String(d.txId || d.id || i), _t: d.bankTime || dt(d.time) || '' }));
   const tabs = [['all', 'Tất cả', () => true], ['ok', 'Đã cộng ví', d => d.status === 'credited'], ['un', 'Chưa khớp', d => d.status === 'unmatched'], ['ig', 'Bỏ qua', d => d.status === 'ignored']];
   const f = (tabs.find(t => t[0] === S.tab) || tabs[0])[2];
   const rows = all.filter(d => f(d) && matchQ(d, ['username', 'content', 'txId', 'reference']));
@@ -93,11 +95,20 @@ ${grid(rows, [
     ['_t', 'Thời gian', d => esc(d._t)],
     ['username', 'Khách', d => esc(d.username || '—')],
     ['content', 'Nội dung', d => `<code>${esc(d.content || '—')}</code>`],
-    ['amount', 'Số tiền', d => fmt(d.amount)],
+    ['amount', 'Số tiền', d => d.type === 'gachthe' ? 'Thẻ ' + fmt(d.declaredValue) + (d.amount ? ' → ' + fmt(d.amount) : '') : fmt(d.amount)],
     ['bonus', 'Thưởng', d => Number(d.bonus) > 0 ? '+' + fmt(d.bonus) : '—'],
     ['type', 'Loại', d => d.type === 'gachthe' ? 'Thẻ cào' : 'Chuyển khoản'],
     ['status', 'Trạng thái', d => { const [c, t] = depSt(d); return pill(c, t); }]
-  ], { key: '_k', acts: d => d.status === 'credited' ? '' : btn('dman', d._k, 'Cộng tay'), empty: 'Chưa có giao dịch nạp.' })}`;
+  ], { key: '_k', acts: d => d.type === 'gachthe' ? (d.status === 'pending' ? btn('dcancel', d._k, 'Hủy chờ', 'bad') : '') : d.status === 'credited' ? '' : btn('dman', d._k, 'Cộng tay'), empty: 'Chưa có giao dịch nạp.' })}`;
+};
+A.dcancel = k => {
+  const d = (D.deposits || []).find((x, i) => String(x.txId || x.id || i) === k);
+  if (!d) return;
+  ask('Hủy thẻ cào ' + fmt(d.declaredValue) + ' của <b>' + esc(d.username) + '</b> đang chờ? Chỉ hủy khi chắc chắn thẻ chưa được nhà cung cấp xử lý (ví dụ Gạch Thẻ đang chặn kết nối). Sau khi hủy, khách gửi lại được đúng thẻ đó.', async () => {
+    await must('POST', '/api/admin/deposits/cancel', { txId: d.txId });
+    log('Đã hủy thẻ chờ của ' + d.username);
+    await LOAD.deposits(); render();
+  }, 'Hủy chờ');
 };
 A.dman = k => {
   const d = (D.deposits || []).find((x, i) => String(x.txId || x.id || i) === k);
