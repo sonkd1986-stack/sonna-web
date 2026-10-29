@@ -63,7 +63,7 @@ function persistBatch(entries) {
       const changedKeys = Array.from(new Set(entries
         .map(([key]) => key)
         .filter(key => key === 'store.json' || key === 'accounts.json' ||
-          key === 'orders.json' || key === 'payment.json')));
+          key === 'orders.json' || key === 'payment.json' || key === 'deposits.json')));
       if (storeChangeNotifier && changedKeys.length) {
         Promise.resolve().then(() => storeChangeNotifier(changedKeys)).catch(error => {
           console.error('[SONNA] Supabase Realtime notification failed; polling remains available:', error);

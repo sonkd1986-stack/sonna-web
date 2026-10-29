@@ -113,7 +113,10 @@ A.mmoney = () => {
 };
 
 // ---------- Nội dung web ----------
-LOAD.web = loadStore;
+LOAD.web = async () => {
+  await loadStore();
+  if (S.wt === 'top') D.top = await must('GET', '/api/admin/top-deposits' + (S.topMonth ? '?month=' + S.topMonth : ''));
+};
 const DEF_BANNERS = [
   { id: 1, kind: 'main', title: 'ACC REROLL UY TÍN, GIAO TỰ ĐỘNG', link: '/acc-reroll', on: true, img: '', kicker: 'SONNA · ACC DRAGON BALL LEGENDS', sub: 'Thanh toán bằng ví, nhận TK|MK ngay sau khi trừ tiền.', bg: 'linear-gradient(120deg,#2D0A3F,#5B1F7A 60%,#8A3FB0)' },
   { id: 2, kind: 'main', title: 'NẠP VÍ THƯỞNG THÊM 5%', link: '/nap-tien', on: true, img: '', kicker: 'KHUYẾN MÃI NẠP', sub: 'Nạp 100.000₫ nhận 105.000₫. Nạp ngân hàng hoặc thẻ cào.', bg: 'linear-gradient(120deg,#102A56,#2F6FD6 70%,#58A0F0)' },
@@ -153,12 +156,31 @@ function orderData(C) {
 const bannersOf = s => Array.isArray(s.banners) ? s.banners : clone(DEF_BANNERS);
 VIEW.web = () => {
   const s = D.store || {}, t = S.wt;
-  const T = [['banner', 'Banner trang chủ'], ['marq', 'Chữ chạy'], ['contact', 'Liên hệ'], ['theme', 'Màu giao diện'], ['sales', 'Acc đã bán'], ['order', 'Thứ tự hiển thị']];
+  const T = [['banner', 'Banner trang chủ'], ['top', 'Top nạp'], ['marq', 'Chữ chạy'], ['contact', 'Liên hệ'], ['theme', 'Màu giao diện'], ['sales', 'Acc đã bán'], ['order', 'Thứ tự hiển thị']];
   let body = '';
   if (t === 'banner') {
     const B = bannersOf(s);
     const group = (kind, title) => `<div class="card mb12"><div class="hd" style="margin-bottom:8px"><h3 style="margin:0">${title}</h3><span class="sp"></span><button class="btn p" data-a="wbadd" data-id="${kind}">Thêm banner</button></div>${B.filter(b => b.kind === kind).map((b, i, a) => `<div class="br">${b.img ? `<img class="thumb" src="${esc(b.img)}" alt="">` : `<div class="thumb" style="display:grid;place-items:center;font-size:11px;color:var(--mut)">Chưa có ảnh</div>`}<div class="grow"><b>${esc(b.title || '(không tiêu đề)')}</b><div class="mut small">${esc(b.link || 'Không có liên kết')}</div></div>${btn('wbtog', b.id, b.on ? 'Đang hiện' : 'Đang ẩn', b.on ? '' : 'bad')}${i > 0 ? btn('wbmv', b.id + '|-1', 'Lên') : ''}${i < a.length - 1 ? btn('wbmv', b.id + '|1', 'Xuống') : ''}${btn('wbedit', b.id, 'Sửa')}${btn('wbdel', b.id, 'Xóa', 'bad')}</div>`).join('') || '<span class="mut">Chưa có banner.</span>'}</div>`;
     body = (Array.isArray(s.banners) ? '' : '<p class="mut">Đang dùng banner mặc định. Thay đổi đầu tiên sẽ lưu danh sách này.</p>') + group('main', 'Banner lớn (chạy luân phiên, ảnh 1200×420)') + group('sub', 'Banner phụ bên phải (ảnh 600×300)');
+  } else if (t === 'top') {
+    const c = s.topDeposit || {}, T2 = D.top || { rows: [], current: '', month: '' };
+    const prize = Number(c.prizeAmount) || 100000;
+    const months = [];
+    if (T2.current) { let [y, m] = T2.current.split('-').map(Number); for (let i = 0; i < 7; i++) { months.push([`${y}-${String(m).padStart(2, '0')}`, `Tháng ${m}/${y}` + (i ? '' : ' (đang diễn ra)')]); if (--m === 0) { m = 12; y--; } } }
+    const isCurrent = T2.month === T2.current;
+    const award = isCurrent ? '<p class="mut" style="margin:0">Tháng đang diễn ra. Sau khi hết tháng, chọn tháng đó ở trên để trao thưởng Top 1.</p>'
+      : T2.awarded ? `<p style="margin:0">${pill('ok', 'Đã trao')} ${fmt(T2.awarded.amount)} cho <b>${esc(T2.awarded.username)}</b> lúc ${esc(dt(T2.awarded.at))}</p>`
+        : T2.rows[0] ? `<div><button class="btn p" data-a="wtopaward" data-id="${esc(T2.month)}">Trao thưởng Top 1: cộng ${fmt(T2.prizeAmount)} cho ${esc(T2.rows[0].username)}</button></div>`
+          : '<p class="mut" style="margin:0">Tháng này không có ai nạp tiền.</p>';
+    body = `<div class="card fr mb12"><h3>Banner Top nạp trên trang chủ</h3><p class="mut" style="margin:0">Nằm dưới banner chính, tự cập nhật 5 người nạp nhiều nhất trong tháng (tiền chuyển khoản và mệnh giá thẻ cào, không tính thưởng nạp hay tiền cộng tay). Tên khách được che bớt, ví dụ <code>so***6</code>.</p>
+<label class="sw"><input type="checkbox" id="tp_on" ${c.enabled !== false ? 'checked' : ''}> Hiện banner Top nạp</label>
+${fld('tp_title', 'Tiêu đề', c.title || 'TOP NẠP THÁNG')}${fld('tp_prize', 'Thưởng Top 1 mỗi tháng (đ)', prize, 'number', 'min="0"')}
+${fld('tp_note', 'Dòng mô tả (để trống = tự ghi theo số tiền thưởng)', c.note || '', 'text', 'placeholder="Top 1 mỗi tháng nhận ' + fmt(prize) + ' vào tài khoản trên web"')}
+<label class="sw"><input type="checkbox" id="tp_amt" ${c.showAmount !== false ? 'checked' : ''}> Hiện số tiền đã nạp của từng người</label>
+<div><button class="btn p" data-a="wtop">Lưu và đăng</button></div></div>
+<div class="card"><div class="hd" style="margin-bottom:8px"><h3 style="margin:0">Bảng xếp hạng</h3><span class="sp"></span><label style="display:flex;flex-direction:row;align-items:center;gap:8px">Tháng<select class="in" id="tp_month" style="width:auto">${months.map(([k, l]) => `<option value="${k}" ${k === T2.month ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+<div class="tw"><table><thead><tr><th class="ns">Hạng</th><th class="ns">Tài khoản</th><th class="ns">Số lần nạp</th><th class="ns">Tổng nạp</th></tr></thead><tbody>${T2.rows.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.username)}</td><td>${r.count}</td><td><b>${fmt(r.total)}</b></td></tr>`).join('')}</tbody></table></div>${T2.rows.length ? '' : none('Chưa có ai nạp trong tháng này.')}
+<div style="margin-top:12px">${award}</div></div>`;
   } else if (t === 'marq') {
     const m = s.marq || {};
     body = `<div class="card fr"><label class="sw"><input type="checkbox" id="q_on" ${m.on !== false ? 'checked' : ''}> Hiện thanh chữ chạy trên cửa hàng</label>${area('q_t', 'Nội dung (mỗi dòng là một thông báo)', m.text != null ? m.text : DEF_MARQ, 6)}<div class="fg">${selBox('q_s', 'Tốc độ', [['slow', 'Chậm'], ['mid', 'Vừa'], ['fast', 'Nhanh']], m.speed || 'mid')}${selBox('q_c', 'Màu', [['orange', 'Cam'], ['blue', 'Xanh'], ['dark', 'Tối']], m.tone || 'orange')}</div><div><button class="btn p" data-a="wmarq">Lưu và đăng</button></div></div>`;
@@ -186,7 +208,22 @@ VIEW.web = () => {
   }
   return `<div class="hd"><h1>Nội dung web</h1></div>${tabsHTML(T, t, 'wtab')}${body}`;
 };
-A.wtab = id => { S.wt = id; render(); };
+A.wtab = async id => { S.wt = id; if (id === 'top') await LOAD.web(); render(); };
+A.wtop = () => saveWeb('topDeposit', cur => ({ ...(cur && typeof cur === 'object' ? cur : {}), enabled: chk('tp_on'), title: val('tp_title'), note: val('tp_note'), prizeAmount: num(val('tp_prize')) || 100000, showAmount: chk('tp_amt') }), 'Đã lưu banner Top nạp');
+A.wtopaward = month => {
+  const r = (D.top || {}).rows || [];
+  if (!r[0]) return;
+  ask(`Cộng <b>${fmt(D.top.prizeAmount)}</b> vào ví <b>${esc(r[0].username)}</b> (Top 1 tháng ${esc(month.slice(5))}/${esc(month.slice(0, 4))}, nạp ${fmt(r[0].total)})? Mỗi tháng chỉ trao được một lần.`, async () => {
+    await must('POST', '/api/admin/top-deposits/award', { month });
+    log('Đã trao thưởng Top 1 tháng ' + month + ' cho ' + r[0].username);
+    await LOAD.web(); render();
+  }, 'Trao thưởng');
+};
+document.addEventListener('change', e => {
+  if (e.target.id !== 'tp_month') return;
+  S.topMonth = e.target.value;
+  LOAD.web().then(render, fail);
+});
 const saveWeb = (k, fn, msg) => saveKey(k, fn).then(() => { log(msg); render(); });
 const editBanners = (fn, msg) => saveWeb('banners', cur => fn(Array.isArray(cur) ? cur : clone(DEF_BANNERS)), msg);
 A.wbtog = id => editBanners(B => B.map(b => String(b.id) === id ? { ...b, on: !b.on } : b), 'Đã cập nhật banner');

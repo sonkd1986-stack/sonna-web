@@ -294,9 +294,33 @@ function publicSales(limit) {
   recent.sort((a, b) => (Date.parse(b.soldAt) || 0) - (Date.parse(a.soldAt) || 0));
   return { count: seen.size, recent: recent.slice(0, limit) };
 }
+// ---------- Top nạp tháng ----------
+// Tháng theo giờ Việt Nam, dạng YYYY-MM.
+function monthKeyVN(time) {
+  const ms = time ? Date.parse(time) : Date.now();
+  return Number.isFinite(ms) ? new Date(ms + 7 * 3600 * 1000).toISOString().slice(0, 7) : '';
+}
+// Xếp hạng theo tiền thật khách nạp trong tháng: chuyển khoản tính số tiền chuyển, thẻ cào tính mệnh giá.
+// Không tính thưởng nạp và tiền admin cộng tay.
+function depositRanking(month) {
+  const totals = new Map();
+  deposits.forEach(d => {
+    if (d.status !== 'credited' || !d.userId || monthKeyVN(d.time) !== month) return;
+    const paid = d.type === 'gachthe' ? Number(d.declaredValue) || 0 : Number(d.amount) || 0;
+    const user = usersDb.users.find(u => u.id === d.userId);
+    const row = totals.get(d.userId) || { userId: d.userId, username: user ? user.username : (d.username || ''), total: 0, count: 0 };
+    row.total += paid; row.count++;
+    totals.set(d.userId, row);
+  });
+  return [...totals.values()].filter(r => r.total > 0).sort((a, b) => b.total - a.total || a.userId - b.userId);
+}
+const maskName = name => { const n = String(name || ''); return n.length <= 2 ? n.slice(0, 1) + '***' : n.slice(0, 2) + '***' + n.slice(-1); };
 function publicStore() {
   const data = { ...store };
   delete data.acc;
+  const topCfg = data.topDeposit && typeof data.topDeposit === 'object' ? data.topDeposit : {};
+  data.topDeposit = { enabled: topCfg.enabled !== false, title: topCfg.title || '', note: topCfg.note || '', showAmount: topCfg.showAmount !== false, prizeAmount: Number(topCfg.prizeAmount) || 100000 };
+  data.topDeposits = data.topDeposit.enabled ? depositRanking(monthKeyVN()).slice(0, 5).map(r => ({ name: maskName(r.username), total: data.topDeposit.showAmount ? r.total : 0 })) : [];
   // adm_* là dữ liệu mẫu của bản thiết kế admin cũ; không gửi cho khách.
   Object.keys(data).forEach(key => { if (key.startsWith('adm_')) delete data[key]; });
   const display = data.salesDisplay && typeof data.salesDisplay === 'object' ? data.salesDisplay : {};
@@ -1147,6 +1171,37 @@ async function handle(req, res) {
       if (p === '/api/admin/deposits' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         return send(res, 200, { deposits: deposits.slice().reverse() });
+      }
+      // Top nạp: bảng xếp hạng đầy đủ cho admin (tên thật) và trao thưởng Top 1 của một tháng đã kết thúc.
+      if (p === '/api/admin/top-deposits' && req.method === 'GET') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
+        const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : monthKeyVN();
+        const cfg = store.topDeposit || {};
+        return send(res, 200, { month, current: monthKeyVN(), rows: depositRanking(month).slice(0, 20), awarded: (cfg.awarded || {})[month] || null, prizeAmount: Number(cfg.prizeAmount) || 100000 });
+      }
+      if (p === '/api/admin/top-deposits/award' && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
+        const month = String((await readBody(req)).month || '');
+        if (!/^\d{4}-\d{2}$/.test(month) || month >= monthKeyVN()) return send(res, 400, { error: 'Chỉ trao thưởng cho tháng đã kết thúc.' });
+        const cfg = store.topDeposit && typeof store.topDeposit === 'object' ? store.topDeposit : {};
+        if ((cfg.awarded || {})[month]) return send(res, 409, { error: 'Tháng ' + month + ' đã trao thưởng rồi.' });
+        const top = depositRanking(month)[0];
+        if (!top) return send(res, 409, { error: 'Tháng ' + month + ' không có ai nạp tiền.' });
+        const amount = Number(cfg.prizeAmount) || 100000;
+        const label = month.slice(5) + '/' + month.slice(0, 4);
+        const nextUsers = JSON.parse(JSON.stringify(usersDb));
+        const winner = nextUsers.users.find(u => u.id === top.userId);
+        if (!winner) return send(res, 409, { error: 'Không tìm thấy tài khoản người thắng.' });
+        winner.wallet += amount;
+        winner.walletHistory = (Array.isArray(winner.walletHistory) ? winner.walletHistory : []).concat({
+          id: crypto.randomBytes(8).toString('hex'), amount, reason: 'Thưởng Top 1 nạp tháng ' + label, createdAt: new Date().toISOString()
+        });
+        const record = { userId: winner.id, username: winner.username, amount, total: top.total, at: new Date().toISOString() };
+        const nextStore = { ...store, topDeposit: { ...cfg, awarded: { ...(cfg.awarded || {}), [month]: record } } };
+        commitState({ [USERS_FILE]: nextUsers, [STORE_FILE]: nextStore });
+        usersDb = nextUsers; store = nextStore;
+        console.log('[SONNA] Top nạp: trao ' + amount + 'đ cho ' + winner.username + ' (Top 1 tháng ' + label + ')');
+        return send(res, 200, { ok: true, awarded: record });
       }
       // IP máy chủ gọi ra ngoài (để nhà cung cấp thẻ cho phép) và thử kết nối Gạch Thẻ.
       if (p === '/api/admin/server-info' && req.method === 'GET') {
