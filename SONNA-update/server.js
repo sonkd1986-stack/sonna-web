@@ -1148,6 +1148,16 @@ async function handle(req, res) {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         return send(res, 200, { deposits: deposits.slice().reverse() });
       }
+      // Admin hủy thẻ cào đang treo (ví dụ nhà cung cấp chặn kết nối): khách hết bị kẹt và được gửi lại đúng thẻ đó.
+      if (p === '/api/admin/deposits/cancel' && req.method === 'POST') {
+        if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
+        const txId = String((await readBody(req)).txId || '');
+        const txn = deposits.find(d => d.txId === txId);
+        if (!txn || txn.type !== 'gachthe' || txn.status !== 'pending') return send(res, 409, { error: 'Chỉ hủy được thẻ cào đang chờ xử lý.' });
+        updateGachTheDeposit(txId, { status: 'failed', notSubmitted: true, providerMessage: 'Admin hủy giao dịch đang chờ; khách có thể gửi lại thẻ.', updatedAt: new Date().toISOString() });
+        console.log('[SONNA] Gạch Thẻ: admin hủy thẻ chờ ' + String(txn.requestId || '').slice(0, 8) + ' của ' + txn.username);
+        return send(res, 200, { ok: true });
+      }
       // ----- khách hàng -----
       if (p === '/api/user/me' && req.method === 'GET') {
         const u = getUser(req);
