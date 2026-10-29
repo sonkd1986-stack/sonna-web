@@ -65,9 +65,13 @@
       '.store-category-section:not(.flame-category){border-color:color-mix(in srgb,var(--category-color) 35%,' + k.borderColor + ')!important}',
       // Nút "Hết hàng" và chữ màu chủ đạo (không có nền riêng) để dễ đọc trên nền tối.
       '#root [style*="background:#D6D2E2"]{background:' + k.surfaceAlt + '!important;color:' + k.mutedText + '!important;box-shadow:inset 0 0 0 1px ' + k.borderColor + '}',
-      '#root [style*="color:' + k.primary + '"]:not([style*="background"]){color:' + k.accentLight + '!important}',
+      // Chữ màu chủ đạo không có nền riêng (hoặc nền trong suốt, như tab và nút viền) -> màu sáng để đọc được trên nền tối.
+      '#root [style*="color:' + k.primary + '"]:not([style*="background"]),#root [style*="color:' + k.primary + '"]:is([style*="background:transparent"],[style*="background:' + k.surface + '"],[style*="background:' + k.surfaceAlt + '"]){color:' + k.accentLight + '!important}',
+      '#root :is([style*="border:1px solid ' + k.primary + '"],[style*="border:2px solid ' + k.primary + '"]):is([style*="background:transparent"],[style*="background:' + k.surface + '"],[style*="background:' + k.surfaceAlt + '"]){border-color:' + k.accentLight + '!important}',
       '#root [style*="color:#C2273D"]{color:' + (t.skin === 'noir' ? k.accentLight : '#FF7A8C') + '!important}',
       '#sonna-brand-logo.sonna-logo-sticky img{padding:0;background:transparent}',
+      // Khung nền nhạt (tint) như thông báo nạp thẻ/nạp tiền: chữ đậm cho dễ đọc. Đặt sau luật đổi màu chữ chủ đạo ở trên.
+      '#root [style*="background:' + k.tint + '"],#root [style*="background:' + k.tint + '"] [style*="color:"]{color:' + k.primary + '!important}',
       '.card{background:color-mix(in srgb,var(--category-color,' + k.accent + ') 9%,' + k.surface + ')!important}',
       '#root [style*="color:#5A5470"]{color:' + k.mutedText + '!important}',
       '#root [style*="color:#1B1530"],#root [style*="color:#211735"]{color:' + k.bodyText + '!important}',

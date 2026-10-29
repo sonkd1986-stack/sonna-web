@@ -247,8 +247,12 @@ A.srvinfo = async () => {
   box.innerHTML = '<span class="mut">Đang kiểm tra (khoảng 5–10 giây)...</span>';
   try {
     const r = await must('GET', '/api/admin/server-info');
-    const ips = r.ips || [];
-    box.innerHTML = `<div>${lr('IP máy chủ', ips.length ? ips.map(ip => `<code>${esc(ip)}</code>`).join(' ') + ' ' + btn('ucp', ips.join(', '), 'Copy') : '<span style="color:var(--bad)">Không lấy được</span>')}${lr('Gạch Thẻ', pill(r.gachthe.ok ? 'ok' : 'bad', r.gachthe.ok ? 'Kết nối được' : 'Lỗi') + ' ' + esc(r.gachthe.message))}</div><p class="mut small" style="margin:6px 0 0">Bấm vài lần nếu cần: máy chủ có thể gọi ra từ nhiều IP khác nhau, hãy gửi Gạch Thẻ tất cả IP đã thấy.</p>`;
+    const ips = r.ips || [], hist = r.history || [];
+    const all = [...new Set(hist.map(h => h.ip).concat(ips))];
+    box.innerHTML = `<div>${lr('IP đang dùng', ips.length ? ips.map(ip => `<code>${esc(ip)}</code>`).join(' ') : '<span style="color:var(--bad)">Không lấy được</span>')}${lr('Gạch Thẻ', pill(r.gachthe.ok ? 'ok' : 'bad', r.gachthe.ok ? 'Kết nối được' : 'Lỗi') + ' ' + esc(r.gachthe.message))}</div>
+<h3 style="margin:12px 0 6px">Tất cả IP máy chủ từng dùng (${all.length}) ${all.length ? btn('ucp', all.join(', '), 'Copy tất cả') : ''}</h3>
+${hist.length ? hist.slice().reverse().map(h => lr(`<code>${esc(h.ip)}</code>`, 'thấy lần đầu ' + esc(dt(h.firstSeen)) + ' · gần nhất ' + esc(dt(h.lastSeen)))).join('') : '<span class="mut">Chưa có.</span>'}
+<p class="mut small" style="margin:6px 0 0">Render có thể đổi IP giữa các lần deploy. Gửi Gạch Thẻ <b>tất cả</b> IP trong danh sách này; khi có IP mới, máy chủ tự ghi thêm vào đây.</p>`;
   } catch (e) { box.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
 };
 A.reset = () => openM('Đặt lại dữ liệu cửa hàng', '<p style="margin:0">Thao tác này không thể hoàn tác. Gõ <b>DAT LAI</b> để xác nhận.</p>' + fld('r_c', 'Xác nhận', ''), async () => {

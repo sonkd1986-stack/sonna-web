@@ -297,7 +297,8 @@
 
   var RUNTIME = '';
   var mobileFix = '<style>html,body{margin:0;min-height:100%}@media (max-width: 768px) {  body { -webkit-text-size-adjust: 100%; }  .card { padding: 8px !important; gap: 6px !important; }  .card > div:first-child { height: 75px !important; }  .card > div:first-child svg { width: 60px !important; height: 60px !important; }  div[style*="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"] { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important; gap: 10px !important; }}</style>';
-  var storeMobileFix = '<style>@media (max-width: 768px) { .cat-grid { display: none !important; } }</style>';
+  // overflow-x:clip bỏ thanh cuộn ngang do nội dung lệch 1px mà không làm hỏng phần tử dính (sticky).
+  var storeMobileFix = '<style>html,body{overflow-x:clip}@media (max-width: 768px) { .cat-grid { display: none !important; } }</style>';
   // Màu cố định của các trang admin cũ -> biến theme (runtime.js thay khi render).
   var ADMIN_THEME_MAP = {
     '0F1320': 'bg', '171C2B': 'card', '1F2538': 'sf', '252B3C': 'sf', '2B3248': 'line', '454D65': 'line', '343B50': 'line',

@@ -321,8 +321,9 @@ function publicStore() {
   const topCfg = data.topDeposit && typeof data.topDeposit === 'object' ? data.topDeposit : {};
   data.topDeposit = { enabled: topCfg.enabled !== false, title: topCfg.title || '', note: topCfg.note || '', showAmount: topCfg.showAmount !== false, prizeAmount: Number(topCfg.prizeAmount) || 100000 };
   data.topDeposits = data.topDeposit.enabled ? depositRanking(monthKeyVN()).slice(0, 5).map(r => ({ name: maskName(r.username), total: data.topDeposit.showAmount ? r.total : 0 })) : [];
-  // adm_* là dữ liệu mẫu của bản thiết kế admin cũ; không gửi cho khách.
+  // adm_* là dữ liệu mẫu của bản thiết kế admin cũ; không gửi cho khách. IP máy chủ chỉ admin xem.
   Object.keys(data).forEach(key => { if (key.startsWith('adm_')) delete data[key]; });
+  delete data.serverIps;
   const display = data.salesDisplay && typeof data.salesDisplay === 'object' ? data.salesDisplay : {};
   const requestedSalesLimit = Math.floor(Number(display.limit) || 6);
   const salesLimit = [3, 6, 9, 12].includes(requestedSalesLimit) ? requestedSalesLimit : 6;
@@ -515,6 +516,27 @@ async function handleGachTheCallback(payload) {
   deposits = nextDeposits;
   return { status: 200, body: { success: true, credited: true } };
 }
+// IP máy chủ gọi ra ngoài: Render có thể dùng IP khác nhau giữa các lần deploy, nên ghi lại mọi IP đã thấy
+// để admin gửi nhà cung cấp thẻ cho phép một lần đủ cả.
+async function currentServerIp() {
+  try { const r = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 }); return r.data && r.data.ip ? String(r.data.ip) : ''; } catch (error) { return ''; }
+}
+async function recordServerIp(reason) {
+  const ip = await currentServerIp();
+  if (!ip) return '';
+  const list = Array.isArray(store.serverIps) ? store.serverIps : [];
+  const now = new Date().toISOString();
+  const found = list.find(x => x.ip === ip);
+  const next = found ? list.map(x => x.ip === ip ? { ...x, lastSeen: now } : x) : list.concat({ ip, firstSeen: now, lastSeen: now });
+  // Chỉ ghi khi có IP mới hoặc lần thấy cuối đã cũ hơn 6 giờ, tránh ghi liên tục.
+  if (!found || Date.now() - Date.parse(found.lastSeen) > 6 * 3600 * 1000) {
+    const nextStore = { ...store, serverIps: next.slice(-20) };
+    commitState({ [STORE_FILE]: nextStore });
+    store = nextStore;
+  }
+  if (!found) console.log('[SONNA] IP máy chủ mới gọi ra ngoài: ' + ip + (reason ? ' (' + reason + ')' : '') + '. Nhớ cho phép IP này ở Gạch Thẻ Auto.');
+  return ip;
+}
 // Thẻ đang chờ: chủ động hỏi Gạch Thẻ (lệnh check) mỗi phút thay vì chỉ chờ callback,
 // để thẻ không bị treo khi callback lỗi. Kết quả đi qua đúng các bước xác minh của callback.
 let reconcilingCards = false;
@@ -553,7 +575,8 @@ async function reconcilePendingCards() {
         const result = await handleGachTheCallback({ request_id: txn.requestId, code, serial, telco: String(checked.telco || ''), callback_sign: gachTheCallbackSign(code, serial, cfg.partnerKey) });
         console.log('[SONNA] Gạch Thẻ: tự kiểm tra thẻ chờ ' + txn.requestId.slice(0, 8) + ' → ' + JSON.stringify(result.body));
       } catch (error) {
-        console.warn('[SONNA] Gạch Thẻ: chưa kiểm tra được thẻ chờ ' + txn.requestId.slice(0, 8) + ': ' + error.message);
+        const ip = error && error.response && error.response.status === 403 ? await recordServerIp('bị Gạch Thẻ chặn') : '';
+        console.warn('[SONNA] Gạch Thẻ: chưa kiểm tra được thẻ chờ ' + txn.requestId.slice(0, 8) + ': ' + error.message + (ip ? ' | IP máy chủ: ' + ip : ''));
       }
     }
   } finally {
@@ -1207,9 +1230,7 @@ async function handle(req, res) {
       if (p === '/api/admin/server-info' && req.method === 'GET') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         const ips = new Set();
-        for (let i = 0; i < 4; i++) {
-          try { const r = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 }); if (r.data && r.data.ip) ips.add(String(r.data.ip)); } catch (error) {}
-        }
+        for (let i = 0; i < 3; i++) { const ip = await recordServerIp('admin kiểm tra'); if (ip) ips.add(ip); }
         let gachthe;
         if (!gachTheReady()) gachthe = { ok: false, message: 'Chưa cấu hình GACHTHE_PARTNER_KEY.' };
         else {
@@ -1222,7 +1243,7 @@ async function handle(req, res) {
             gachthe = { ok: false, message: status ? 'Gạch Thẻ từ chối kết nối (HTTP ' + status + ')' + (status === 403 ? ': cần cho phép IP máy chủ.' : '.') : 'Không kết nối được: ' + error.message };
           }
         }
-        return send(res, 200, { ips: [...ips], gachthe });
+        return send(res, 200, { ips: [...ips], history: Array.isArray(store.serverIps) ? store.serverIps : [], gachthe });
       }
       // Admin hủy thẻ cào đang treo (ví dụ nhà cung cấp chặn kết nối): khách hết bị kẹt và được gửi lại đúng thẻ đó.
       if (p === '/api/admin/deposits/cancel' && req.method === 'POST') {
@@ -1632,7 +1653,8 @@ async function handle(req, res) {
               providerMessage: 'Nhà cung cấp từ chối kết nối (HTTP ' + httpStatus + '), thẻ chưa được gửi.',
               updatedAt: new Date().toISOString()
             });
-            console.error('[SONNA] Gạch Thẻ từ chối kết nối khi gửi thẻ (HTTP ' + httpStatus + '): kiểm tra danh sách IP cho phép của merchant.', requestId.slice(0, 8));
+            const ip = await recordServerIp('bị Gạch Thẻ chặn khi gửi thẻ');
+            console.error('[SONNA] Gạch Thẻ từ chối kết nối khi gửi thẻ (HTTP ' + httpStatus + '): kiểm tra danh sách IP cho phép của merchant. IP máy chủ: ' + (ip || 'không rõ'), requestId.slice(0, 8));
             return send(res, 502, { error: 'Chưa gửi được thẻ tới nhà cung cấp (lỗi ' + httpStatus + '). Thẻ chưa bị trừ; vui lòng thử lại sau hoặc liên hệ hỗ trợ.' });
           }
           console.error('[SONNA] Gạch Thẻ request outcome is unknown; awaiting provider callback:', requestId, error.message);
@@ -2117,6 +2139,8 @@ async function startServer() {
   return handle(req, res);
   });
   setInterval(() => { reconcilePendingCards().catch(error => console.error('[SONNA] Gạch Thẻ reconcile failed:', error)); }, 60 * 1000);
+  recordServerIp('khởi động').catch(() => {});
+  setInterval(() => { recordServerIp().catch(() => {}); }, 30 * 60 * 1000);
   server.listen(PORT, () => { console.log(`[SONNA] http://localhost:${PORT}`); console.log('[SONNA] Dữ liệu bền vững lưu trên Supabase PostgreSQL và Storage.'); if (simTopup()) console.log('[SONNA] CẢNH BÁO: nút "Giả lập: đã nhận tiền" đang BẬT, khách tự cộng ví được. Cấu hình ngân hàng/SePay trong Admin > Thanh toán hoặc biến môi trường; hoặc chạy SIM_TOPUP=0 khi bán thật.');
   if (!payReady()) console.log('[SONNA] Nạp tự động chưa cấu hình: xem Admin > Thanh toán và README.'); });
 }
