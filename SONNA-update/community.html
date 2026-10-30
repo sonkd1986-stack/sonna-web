@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#24143d">
+<title>SONNA | Diễn đàn & Chợ thành viên</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#24143d;background:#f4f2f8;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0;min-width:320px}
+button,input,select,textarea{font:inherit}
+button,a{touch-action:manipulation}
+a{color:inherit}
+.top{background:#24143d;color:#fff}
+.top-inner{max-width:1200px;margin:auto;padding:14px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:850;letter-spacing:.16em;text-decoration:none}
+.brand span{color:#ffc24b}
+.toplinks{display:flex;min-width:0;flex-wrap:wrap;gap:8px}
+.toplinks a,.toplinks button{display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid #654d7c;border-radius:9px;background:transparent;color:#fff;text-decoration:none;font-size:13px;font-weight:650;cursor:pointer}
+.toplinks .active,.toplinks a:hover,.toplinks button:hover{background:#ff8a1f;border-color:#ff8a1f;color:#24143d}
+.notification-count{display:inline-grid;place-items:center;min-width:19px;height:19px;margin-left:5px;padding:0 5px;border-radius:999px;background:#ff8a1f;color:#24143d;font-size:10px;font-weight:800}
+.user-chip{margin-left:auto;display:flex;flex:0 0 auto;align-items:center;gap:9px;font-size:13px;color:#e5ddef}
+.user-chip .member-link{color:#fff}
+.avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#654d7c;color:#fff;font-weight:750}
+.notice{background:#fff5e8;border-bottom:1px solid #f2d9b6;color:#70440e}
+.notice-inner{max-width:1200px;margin:auto;padding:10px 22px;font-size:13px;line-height:1.5}
+.notice strong{color:#8c4c00}
+main{max-width:1200px;margin:24px auto;padding:0 22px 52px}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:19px}
+.eyebrow{margin:0 0 5px;color:#8051a0;text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.14em}
+h1{margin:0;font-size:clamp(27px,4vw,38px);line-height:1.12;letter-spacing:-.04em}
+.sub{margin:8px 0 0;color:#70677b;font-size:14px}
+.button{border:0;border-radius:9px;min-height:42px;padding:0 16px;background:#5b1f7a;color:#fff;font-weight:700;cursor:pointer}
+.button:hover{background:#41145a}
+.button.orange{background:#ff8a1f;color:#24143d}
+.button.orange:hover{background:#ff9e43}
+.button.light{background:#fff;color:#4b3c5e;border:1px solid #dfd9e8}
+.button.danger{background:#a82c48;color:#fff}
+.button.small{min-height:34px;padding:0 11px;font-size:12px}
+.tabs{display:flex;gap:7px;padding:5px;background:#e9e5f0;border-radius:12px;width:max-content;max-width:100%;overflow:auto;margin:0 0 18px}
+.tab{white-space:nowrap;border:0;border-radius:9px;background:transparent;padding:10px 16px;color:#62586f;font-size:13px;font-weight:750;cursor:pointer}
+.tab.active{background:#fff;color:#4b1764;box-shadow:0 2px 8px #30204414}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.panel,.card{background:#fff;border:1px solid #e7e2ee;border-radius:14px;box-shadow:0 5px 20px #35234b08}
+.panel{padding:17px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:13px}
+.panel-head h2,.side h2{margin:0;font-size:17px;letter-spacing:-.02em}
+.search{width:min(100%,260px);height:39px;border:1px solid #e1dbe9;border-radius:9px;padding:0 12px;color:#24143d;background:#fff}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 15px}
+.chip{border:1px solid #e4ddec;background:#fff;color:#675b73;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:650;cursor:pointer}
+.chip.active{background:#f3eafa;border-color:#d6b9e6;color:#5b1f7a}
+.feed{display:grid;gap:10px}
+.post{padding:15px;border:1px solid #ece8f1;border-radius:12px;background:#fff}
+.post.pinned{border-left:4px solid #ff8a1f}
+.post-top{display:flex;align-items:center;gap:9px}
+.post-top .avatar{width:36px;height:36px;background:#eee8f4;color:#5b1f7a}
+.post-user{min-width:0;flex:1}
+.post-user strong{font-size:13px}
+.member-link{display:inline;border:0;padding:0;background:transparent;color:#4b1764;font:inherit;font-weight:750;text-align:left;cursor:pointer}
+.member-link:hover{text-decoration:underline}
+.member-link:focus-visible{outline:2px solid #ff8a1f;outline-offset:2px;border-radius:3px}
+.muted{color:#847b8e;font-size:11px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#eff8f2;color:#18724b;font-size:10px;font-weight:750}
+.badge.purple{background:#f3eafa;color:#5b1f7a}
+.badge.orange{background:#fff1df;color:#a95300}
+.badge.admin{background:#fff1c2;color:#784b00;border:1px solid #edbc45;font-weight:850}
+#communityAuth.admin-login{padding:6px 10px;border:1px solid #ffc24b;border-radius:8px;background:#ffc24b;color:#24143d;font-weight:850;text-decoration:none}
+.avatar.admin-avatar{background:#ffc24b;color:#24143d;border:2px solid #fff1c2}
+.admin-post-author{color:#784b00;font-weight:850}
+.post h3{margin:12px 0 5px;font-size:16px;line-height:1.35}
+.post p{margin:0;color:#655d70;font-size:13px;line-height:1.55;white-space:pre-line}
+.post-actions{display:flex;gap:8px;align-items:center;margin-top:13px;padding-top:11px;border-top:1px solid #f0edf3}
+.text-button{border:0;background:transparent;color:#675b73;padding:5px 7px;font-size:12px;font-weight:700;cursor:pointer}
+.text-button:hover,.text-button.liked{color:#b1285b}
+.comments{margin-top:12px;padding:12px;background:#f8f6fa;border-radius:10px}
+.comment{font-size:12px;color:#554b61;margin:0 0 8px}
+.comment strong{color:#4b1764}
+.comment-form{display:flex;gap:7px}
+.comment-form input{min-width:0;flex:1;height:35px;border:1px solid #ded8e6;border-radius:8px;padding:0 10px;font-size:12px}
+.post-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:8px;margin-top:12px}
+.post-gallery img{display:block;width:100%;height:160px;object-fit:cover;border:1px solid #ece8f1;border-radius:9px;background:#f7f4fa}
+.image-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:7px;margin-top:8px}
+.image-preview-item{position:relative;height:74px;border-radius:8px;overflow:hidden;background:#f3eff7}
+.image-preview-item img{width:100%;height:100%;object-fit:cover}
+.image-preview-item button{position:absolute;right:4px;top:4px;width:23px;height:23px;padding:0;border:0;border-radius:50%;background:#24143dcc;color:#fff;font-weight:800;cursor:pointer}
+.chat-layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:550px;overflow:hidden}
+.chat-sidebar{border-right:1px solid #eee9f2;padding:14px}
+.chat-sidebar h2{margin:2px 0 12px;font-size:15px}
+.chat-list{display:grid;gap:5px}
+.chat-person{display:flex;width:100%;align-items:center;gap:9px;padding:9px;border:0;border-radius:9px;background:transparent;text-align:left;cursor:pointer}
+.chat-person:hover,.chat-person.active{background:#f3eafa}
+.chat-person .avatar{width:35px;height:35px;flex:none;background:#eee8f4;color:#5b1f7a}
+.chat-person strong{display:block;font-size:12px}
+.chat-person small{display:block;margin-top:2px;color:#847b8e;font-size:10px}
+.chat-main{display:flex;min-width:0;flex-direction:column;padding:15px}
+.chat-heading{display:flex;align-items:center;gap:9px;padding-bottom:11px;border-bottom:1px solid #f0edf3}
+.chat-heading strong{font-size:14px}
+.chat-heading small{display:block;color:#847b8e;font-size:10px}
+.chat-messages{display:flex;flex:1;min-height:340px;max-height:480px;flex-direction:column;gap:9px;overflow:auto;padding:14px 2px}
+.chat-message{max-width:min(82%,480px);align-self:flex-start;padding:9px 11px;border-radius:12px 12px 12px 3px;background:#f3eff7;color:#3d334b;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.chat-message.mine{align-self:flex-end;border-radius:12px 12px 3px 12px;background:#5b1f7a;color:#fff}
+.chat-message strong{display:block;margin-bottom:2px;font-size:10px;opacity:.78}
+.chat-message.mine .member-link{color:#fff}
+.chat-message time{display:block;margin-top:3px;font-size:9px;opacity:.65}
+.chat-form{display:flex;gap:8px;padding-top:10px;border-top:1px solid #f0edf3}
+.chat-form input{min-width:0;flex:1;height:42px;border:1px solid #e1dbe9;border-radius:9px;padding:0 12px}
+.chat-note{margin:0 0 10px;padding:9px 11px;border-radius:8px;background:#fff5e8;color:#70440e;font-size:10px;line-height:1.5}
+.side{display:grid;gap:13px}
+.side .card{padding:16px}
+.side p{margin:8px 0 0;color:#70677b;font-size:12px;line-height:1.55}
+.rule{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f0edf3;font-size:12px;color:#62586f}
+.rule:last-child{border:0;padding-bottom:0}
+.rule b{color:#4b1764}
+.forum-empty{padding:22px;text-align:center;color:#70677b;font-size:13px}
+.market-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;align-items:start}
+.listings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.listing{overflow:hidden}
+.listing-art{height:108px;display:flex;align-items:flex-end;padding:13px;background:radial-gradient(circle at 78% 18%,#ffce76 0 7%,transparent 8%),linear-gradient(135deg,#301348,#65409a 60%,#ff8a1f);color:#fff;font-size:12px;font-weight:800;letter-spacing:.09em}
+.listing:nth-child(2n) .listing-art{background:radial-gradient(circle at 75% 24%,#b5f2e1 0 7%,transparent 8%),linear-gradient(135deg,#134b4c,#318576 60%,#f4b15d)}
+.listing-body{padding:14px}
+.listing-body h3{margin:0 0 7px;font-size:15px;line-height:1.35}
+.listing-body>p{margin:0;color:#756d7e;font-size:12px;line-height:1.5}
+.seller{display:flex;align-items:center;gap:7px;margin:11px 0}
+.seller .avatar{width:28px;height:28px;font-size:11px;background:#eee8f4;color:#5b1f7a}
+.seller-name{font-size:11px;font-weight:750}
+.price-row{display:flex;align-items:end;justify-content:space-between;gap:8px;margin:12px 0}
+.price{color:#4b1764;font-size:20px;font-weight:850;letter-spacing:-.04em;white-space:nowrap}
+.listing-meta{display:flex;gap:6px;flex-wrap:wrap}
+.trust{font-size:10px;color:#18724b;font-weight:700}
+.fee-card{position:sticky;top:12px}
+.fee-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #f0edf3;font-size:12px}
+.fee-row:last-of-type{border:0}
+.fee-row b{white-space:nowrap}
+.order{padding:14px;border:1px solid #e9e4ef;border-radius:11px;margin-top:10px}
+.order-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.order-head strong{font-size:13px}
+.status{border-radius:999px;padding:5px 8px;background:#fff2df;color:#985300;font-size:10px;font-weight:800}
+.status.done{background:#eaf6ef;color:#18724b}
+.status.dispute{background:#fff0f0;color:#a32838}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:13px 0 10px}
+.step{height:4px;border-radius:8px;background:#e8e3ed}
+.step.done{background:#ff8a1f}
+.order p{margin:6px 0;color:#6e6479;font-size:11px;line-height:1.5}
+.order-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.metric{padding:13px;border-radius:11px;background:#f7f4fa}
+.metric span{display:block;color:#736b7c;font-size:11px}
+.metric strong{display:block;margin-top:5px;font-size:22px;color:#4b1764}
+.admin-box{padding:14px;border:1px solid #e9e4ef;border-radius:11px;margin-top:10px}
+.admin-box h3{font-size:14px;margin:0 0 6px}
+.admin-box p{font-size:12px;color:#70677b;margin:0 0 10px}
+.profile-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:18px;border:1px solid #eee9f2;border-radius:12px;background:#fbf9fd}
+.profile-avatar{display:grid;place-items:center;flex:none;width:68px;height:68px;border-radius:50%;background:#eee8f4;color:#5b1f7a;font-size:26px;font-weight:850}
+.profile-main{flex:1;min-width:180px}
+.profile-main h2{margin:0 0 5px;font-size:22px}
+.profile-main p{margin:0;color:#756d7e;font-size:12px}
+.profile-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.profile-stat{padding:8px 11px;border-radius:9px;background:#f3eff7;color:#58476c;font-size:11px}
+.profile-post{padding:13px 0;border-bottom:1px solid #f0edf3}
+.profile-post:last-child{border-bottom:0}
+.profile-post h3{margin:0 0 5px;font-size:14px}
+.profile-post p{margin:0;color:#6f6679;font-size:12px;line-height:1.5;white-space:pre-line}
+.profile-post-meta{margin-top:7px;color:#847b8e;font-size:10px}
+.modal-backdrop{position:fixed;inset:0;z-index:5;display:none;align-items:center;justify-content:center;padding:18px;background:#211532aa}
+.modal-backdrop.show{display:flex}
+.modal{width:min(100%,540px);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 70px #14092355}
+.modal h2{margin:0 0 6px;font-size:20px}
+.modal p{color:#70677b;font-size:13px;line-height:1.5}
+.field{display:grid;gap:5px;margin:12px 0;color:#554b61;font-size:12px;font-weight:700}
+.field input,.field select,.field textarea{width:100%;border:1px solid #ded8e6;border-radius:8px;padding:10px;color:#24143d;background:#fff}
+.field textarea{min-height:110px;resize:vertical}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
+.toast{position:fixed;z-index:8;right:20px;bottom:20px;max-width:min(400px,calc(100vw - 40px));padding:13px 16px;border-radius:11px;background:#24143d;color:#fff;font-size:13px;box-shadow:0 8px 30px #24143d45;display:none}
+.toast.show{display:block}
+.footer-note{margin-top:16px;color:#82798d;font-size:11px;line-height:1.5}
+.notification-item{display:flex;width:100%;flex-direction:column;gap:5px;margin:7px 0;padding:13px;border:1px solid #e7e2ee;border-radius:10px;background:#fff;color:#554b61;text-align:left;cursor:pointer}
+.notification-item.unread{border-color:#d6b9e6;background:#faf5ff}
+.notification-item strong{font-size:13px}
+.notification-item:hover{border-color:#5b1f7a}
+.admin-post-images{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.admin-post-images img{width:100px;height:100px;object-fit:cover;border:1px solid #e7e2ee;border-radius:8px}
+.hidden{display:none!important}
+@media(max-width:850px){.layout,.market-layout{grid-template-columns:1fr}.side{grid-template-columns:repeat(2,minmax(0,1fr))}.fee-card{position:static}.chat-layout{grid-template-columns:210px minmax(0,1fr)}}
+@media(max-width:570px){.top-inner{padding:12px 14px;gap:11px}.brand{font-size:19px}.user-chip{margin-left:0}.toplinks{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.toplinks a,.toplinks button{min-width:0;justify-content:center;padding:0 4px;font-size:11px;white-space:nowrap}.notice-inner{padding:9px 14px}main{padding:0 13px 36px;margin:18px auto}.hero{align-items:flex-start}.hero>.button{width:100%}.panel{padding:12px}.side{grid-template-columns:1fr}.listings{grid-template-columns:1fr}.listing-art{height:92px}.admin-grid{grid-template-columns:1fr}.search{width:100%}.order-actions .button{flex:1}.chat-layout{grid-template-columns:1fr;min-height:0}.chat-sidebar{border-right:0;border-bottom:1px solid #eee9f2;padding:10px}.chat-sidebar h2{margin-bottom:8px}.chat-list{display:flex;overflow:auto}.chat-person{min-width:145px}.chat-messages{min-height:300px;max-height:55vh}.chat-main{padding:12px}.post-gallery{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}.post-gallery img{height:125px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="/">SONNA<span>·</span></a>
+    <nav class="toplinks" aria-label="Cộng đồng">
+      <a href="/">← Cửa hàng</a>
+      <button id="forumTab" class="active" type="button">Diễn đàn</button>
+      <button id="marketTab" type="button">Chợ thành viên</button>
+      <button id="chatTab" type="button">Chat thành viên</button>
+      <button id="notificationsTab" type="button">Thông báo <span id="notificationCount" class="notification-count hidden"></span></button>
+      <button id="adminTab" class="hidden" type="button">Kiểm duyệt</button>
+    </nav>
+    <div class="user-chip"><span class="avatar" id="currentAvatar">?</span><button type="button" class="member-link" id="communityAuth">Đăng nhập</button></div>
+  </div>
+</header>
+<div class="notice"><div class="notice-inner"><strong>BÀI VIẾT ĐƯỢC QUẢN TRỊ VIÊN DUYỆT TRƯỚC KHI HIỂN THỊ.</strong> Chợ thành viên hiện chỉ là bản demo, không giao dịch tiền thật. Không đăng mật khẩu game, mã OTP hoặc giấy tờ cá nhân.</div></div>
+<main>
+  <section class="hero">
+    <div><p class="eyebrow" id="eyebrow">CỘNG ĐỒNG SONNA</p><h1 id="pageTitle">Diễn đàn giao lưu</h1><p class="sub" id="pageSub">Chia sẻ kinh nghiệm, tìm đồng đội và cùng xây dựng cộng đồng.</p></div>
+    <button class="button orange" id="heroAction" type="button">＋ Đăng bài</button>
+  </section>
+  <div id="forumView">
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-head"><h2>Bài viết mới</h2><input class="search" id="postSearch" type="search" placeholder="Tìm bài viết..." aria-label="Tìm bài viết"></div>
+        <div class="chips" id="categoryChips"></div>
+        <div class="feed" id="postFeed"></div>
+      </section>
+      <aside class="side">
+        <section class="card" style="padding:16px"><h2>Chuyên mục</h2><p>Góc chia sẻ cho người chơi Dragon Ball Legends.</p><div class="rule"><span>💬</span><span><b>Thảo luận chung</b><br>Trao đổi mọi chủ đề</span></div><div class="rule"><span>🧩</span><span><b>Hướng dẫn / Build đội hình</b><br>Chia sẻ chiến thuật</span></div><div class="rule"><span>🎉</span><span><b>Sự kiện · Khoe acc · Tìm bang hội</b><br>Kết nối cộng đồng</span></div><div class="rule"><span>💡</span><span><b>Góp ý</b><br>Đề xuất cải thiện</span></div></section>
+        <section class="card" style="padding:16px"><h2>Nội quy cộng đồng</h2><p>Tôn trọng thành viên, không đăng thông tin cá nhân, không spam hoặc mạo danh. Nội dung vi phạm có thể bị ẩn và chuyển kiểm duyệt.</p><div class="rule"><span>✓</span><span>Chia sẻ văn minh, đúng chuyên mục</span></div><div class="rule"><span>✓</span><span>Báo cáo bài đáng ngờ thay vì công kích</span></div><div class="rule"><span>!</span><span><b>Không đăng mật khẩu, mã OTP hay CCCD</b></span></div></section>
+        <section class="card" style="padding:16px"><h2>Quản lý cộng đồng</h2><p>Bài viết và thành viên được quản lý trên máy chủ. Admin có thể xóa nội dung vi phạm hoặc khóa tài khoản.</p></section>
+      </aside>
+    </div>
+    <div id="notificationsView" class="hidden">
+      <section class="panel"><div class="panel-head"><h2>Thông báo của bạn</h2><button id="markNotificationsRead" class="button light small" type="button">Đánh dấu tất cả đã đọc</button></div><div id="notificationList"></div></section>
+    </div>
+  </div>
+  <div id="marketView" class="hidden">
+    <div class="market-layout">
+      <section class="panel">
+        <div class="panel-head"><h2>Tài khoản thành viên</h2><input class="search" id="marketSearch" type="search" placeholder="Tìm theo tên, nền tảng..." aria-label="Tìm tài khoản"></div>
+        <div class="chips" id="marketChips"></div>
+        <div class="listings" id="listingGrid"></div>
+        <p class="footer-note">Danh sách minh họa. Huy hiệu xác minh, lịch sử giao dịch và đánh giá là dữ liệu giả lập; chưa có xác minh danh tính thực tế.</p>
+      </section>
+      <aside class="side">
+        <section class="card fee-card">
+          <h2>Phí trung gian · tham khảo</h2><p>Mức phí demo theo bậc giá; có thể cấu hình lại sau khi chốt mô hình vận hành.</p>
+          <div class="fee-row"><span>Dưới 1.000.000₫</span><b>7%</b></div><div class="fee-row"><span>1.000.000–4.999.999₫</span><b>5%</b></div><div class="fee-row"><span>Từ 5.000.000₫</span><b>3%</b></div>
+          <p><b>Chưa kết nối thanh toán.</b> Không chuyển khoản vào tài khoản của website trong bản demo.</p>
+        </section>
+        <section class="card" style="padding:16px"><h2>Quy trình mẫu</h2><p>1. Tạo đơn demo<br>2. Mô phỏng xác nhận thanh toán<br>3. Người bán xác nhận bàn giao<br>4. Người mua xác nhận hoặc khiếu nại<br>5. Admin demo xử lý</p><p>Thông tin liên hệ riêng không hiển thị trên tin đăng. Dữ liệu đơn demo lưu trong trình duyệt này.</p></section>
+      </aside>
+    </div>
+  </div>
+  <div id="ordersView" class="hidden">
+    <div class="layout"><section class="panel"><div class="panel-head"><h2>Đơn demo của tôi</h2><span class="badge orange">Không có tiền thật</span></div><div id="ordersList"></div></section>
+      <aside class="side"><section class="card" style="padding:16px"><h2>Trạng thái đơn</h2><p>Chờ thanh toán → Đã giữ tiền (mô phỏng) → Đang giao acc → Chờ xác nhận → Hoàn tất.</p><p>Khi có vấn đề, người mua có thể mở khiếu nại để chuyển sang khu vực admin demo.</p></section></aside>
+    </div>
+  </div>
+  <div id="adminView" class="hidden">
+    <section class="panel"><div class="panel-head"><h2>Quản lý cộng đồng</h2><span class="badge" id="adminStatus">Đã xác thực admin</span></div><div class="admin-grid" id="adminMetrics"></div><div class="admin-box"><h3>Báo cáo vi phạm</h3><p>Xem lý do báo cáo, xử lý nội dung hoặc đóng báo cáo.</p><div id="adminReports"></div></div><div class="admin-box"><h3>Duyệt và quản lý bài viết</h3><p>Bài mới ở trạng thái chờ duyệt. Có thể duyệt, từ chối, ghim, khóa tương tác hoặc xóa bài.</p><div id="adminQueue"></div></div><div class="admin-box"><h3>Thành viên</h3><p>Dùng chung tài khoản cửa hàng và diễn đàn. Cấp hoặc thu hồi quyền đăng bài không cần duyệt cho từng thành viên tại đây. Khóa sẽ chặn đăng nhập và thu hồi phiên hiện tại.</p><div id="adminMembers"></div></div></section>
+  </div>
+  <div id="chatView" class="hidden">
+    <section class="panel chat-layout">
+      <aside class="chat-sidebar"><h2>Cuộc trò chuyện</h2><div class="chat-list" id="chatList"></div></aside>
+      <section class="chat-main">
+        <div class="chat-heading"><span class="avatar" id="chatAvatar">💬</span><div style="flex:1"><strong id="chatTitle">Phòng chung SONNA</strong><small id="chatSubtitle">Trao đổi cùng cộng đồng</small></div><button class="button light small hidden" id="chatProfile" type="button">Hồ sơ</button></div>
+        <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+        <p class="chat-note" id="chatNotice">Đăng nhập thành viên để gửi tin nhắn. Không gửi mật khẩu, mã OTP hay thông tin riêng tư.</p>
+        <form class="chat-form" id="chatForm"><input name="message" maxlength="500" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn" required><button class="button" type="submit">Gửi</button></form>
+      </section>
+    </section>
+  </div>
+  <div id="profileView" class="hidden">
+    <section class="panel"><div id="profileContent"></div></section>
+  </div>
+</main>
+<div class="modal-backdrop" id="modalBackdrop" role="presentation">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div id="modalContent"></div>
+  </section>
+</div>
+<div class="modal-backdrop" id="authBackdrop" role="presentation">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div id="authContent"></div></section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+  'use strict';
+  var categories=['Tất cả','Thảo luận chung','Hướng dẫn / Build đội hình','Sự kiện','Khoe acc','Tìm bang hội','Góp ý'];
+  var posts=[
+    {id:1,category:'Hướng dẫn / Build đội hình',author:'MikaDBL',initial:'M',time:'12 phút trước',title:'Build đội hình Saiyan cho người mới mùa này',body:'Mình đang test team Saiyan với leader Goku. Ưu tiên Zenkai buff cho core, equips tập trung strike attack và health. Mọi người có gợi ý thay slot support không?',likes:24,comments:[['Rin','Thử thêm bench buff HP nhé.']] ,pinned:true,verified:true},
+    {id:2,category:'Sự kiện',author:'Hana',initial:'H',time:'35 phút trước',title:'Mọi người đã farm đủ huy chương sự kiện chưa?',body:'Mình thấy stage co-op hôm nay rơi huy chương ổn hơn. Chia sẻ route farm nhanh ở đây nha.',likes:12,comments:[['Kaito','Chạy bonus unit sẽ nhanh hơn nhiều.'],['Luna','Cảm ơn bạn!']],pinned:false,verified:false},
+    {id:3,category:'Tìm bang hội',author:'BuuEnjoyer',initial:'B',time:'1 giờ trước',title:'Tìm bang hội hoạt động đều, ưu tiên vui vẻ',body:'Mình online buổi tối, chơi daily và muốn tìm guild không áp lực. Ai còn slot cho mình xin thông tin trong bình luận nhé.',likes:8,comments:[],pinned:false,verified:true},
+    {id:4,category:'Khoe acc',author:'VegetaFan',initial:'V',time:'3 giờ trước',title:'Cuối cùng cũng lên được rank mục tiêu!',body:'Sau mấy ngày leo rank thì cũng đạt top mới. Chúc mọi người mùa này nhiều trận đẹp!',likes:31,comments:[['MikaDBL','Chúc mừng nhé!']],pinned:false,verified:false},
+    {id:5,category:'Góp ý',author:'AnNguyen',initial:'A',time:'Hôm qua',title:'Góp ý thêm tag nền tảng Android / iOS',body:'Nếu có tag nền tảng và bộ lọc theo phiên bản thì tìm hướng dẫn sẽ nhanh hơn.',likes:5,comments:[],pinned:false,verified:true},
+    {id:6,category:'Thảo luận chung',author:'Kaito',initial:'K',time:'Hôm qua',title:'Nhân vật nào đáng đầu tư tài nguyên nhất?',body:'Mình mới quay lại game, muốn nghe ý kiến về các nhân vật dễ dùng và có giá trị lâu dài.',likes:17,comments:[['Hana','Tùy box của bạn nữa, đăng team hiện tại thử nha.']],pinned:false,verified:false}
+  ];
+  var listings=[
+    {id:'A-204',title:'Đội hình Saiyan · nhiều nhân vật Zenkai',platform:'Android',rank:'Rank 65',price:3000000,seller:'RồngLửa',initial:'R',sales:18,rating:'4.9',verified:true,description:'Có ảnh đội hình minh họa · thông tin đăng nhập không hiển thị công khai.'},
+    {id:'A-205',title:'Acc reroll · nhiều Chrono Crystal',platform:'iOS',rank:'Rank 24',price:750000,seller:'MâyTím',initial:'M',sales:7,rating:'5.0',verified:true,description:'Tài khoản demo cho giao diện · không phải acc thật.'},
+    {id:'A-206',title:'Team PvP · nhiều nhân vật ULTRA',platform:'Android',rank:'Rank 80',price:6200000,seller:'Kakarot88',initial:'K',sales:42,rating:'4.8',verified:true,description:'Tin mẫu để trình bày trang chi tiết và phí giao dịch.'},
+    {id:'A-207',title:'Acc khởi đầu · đội hình cân bằng',platform:'iOS',rank:'Rank 31',price:1200000,seller:'Hana',initial:'H',sales:3,rating:'5.0',verified:false,description:'Người bán mới trong dữ liệu demo; hãy xem lịch sử và đánh giá.'}
+  ];
+  var storageKey='sonna-community-demo-v1', imageDbPromise, imageUrls={};
+  var stored={};
+  try{stored=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch(e){stored={};}
+  if(!Array.isArray(stored.orders))stored.orders=[];
+  if(!Array.isArray(stored.posts))stored.posts=[];
+  if(!stored.chatMessages||typeof stored.chatMessages!=='object')stored.chatMessages={};
+  if(!stored.postComments||typeof stored.postComments!=='object')stored.postComments={};
+  var orders=stored.orders;
+  var userPosts=stored.posts;
+  posts=posts.concat(userPosts.map(function(post){post.userPost=true;post.comments=Array.isArray(stored.postComments[post.id])?stored.postComments[post.id]:(post.comments||[]);return post;}));
+  posts.forEach(function(post){if(stored.postComments[post.id])post.comments=stored.postComments[post.id];});
+  var chatMessages={};
+  var chatMembers=[{id:'group',name:'Phòng chung SONNA',initial:'💬',subtitle:'Trao đổi cùng cộng đồng'}];
+  var activeChat='group', activeProfile='', communityUser=null, communityAdmin=false, profileData=null, sessionPromise=null, pendingMemberAction=null;
+  var liked=new Set(Array.isArray(stored.liked)?stored.liked.map(String):[]);
+  var selectedCategory='Tất cả', selectedMarket='Tất cả', activeView='forum', toastTimer;
+  var $=function(id){return document.getElementById(id);};
+  function request(method,url,body){return fetch(url,{method:method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}).then(function(response){return response.json().catch(function(){return {};}).then(function(data){data._status=response.status;return data;});});}
+  function updateIdentity(){ $('communityAuth').textContent=communityUser?communityUser.username:communityAdmin?'Admin':'Đăng nhập';$('currentAvatar').textContent=communityUser?communityUser.username.slice(0,1).toUpperCase():communityAdmin?'A':'?';$('adminTab').classList.toggle('hidden',!communityAdmin);if(!communityUser)$('notificationCount').classList.add('hidden'); }
+  function syncSession(){if(sessionPromise)return sessionPromise;sessionPromise=request('GET','/api/session').then(function(session){communityUser=session.user||null;communityAdmin=!!session.authed;updateIdentity();return session;}).then(function(session){sessionPromise=null;return session;},function(error){sessionPromise=null;throw error;});return sessionPromise;}
+  function ensureMember(onReady){if(communityUser){if(onReady)onReady();return true;}if(onReady)pendingMemberAction=onReady;syncSession().then(function(session){if(session.user){var action=pendingMemberAction;pendingMemberAction=null;if(action)action();return;}openAuthModal();say('Đăng nhập hoặc tạo tài khoản thành viên để tiếp tục.');}).catch(function(error){console.error('[SONNA] Member session check failed:',error);openAuthModal();say('Không kiểm tra được phiên đăng nhập. Hãy thử đăng nhập lại.');});return false;}
+  function openAuthModal(){ $('authContent').innerHTML='<h2 id="authTitle">Đăng nhập SONNA</h2><p>Dùng chung tài khoản thành viên cửa hàng và diễn đàn. Admin đăng nhập tại diễn đàn vẫn ở lại khu quản trị diễn đàn.</p><label class="field">Loại tài khoản<select id="authRole"><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select></label><form id="authForm"><label class="field">Tên đăng nhập<input name="username" required autocomplete="username"></label><label class="field">Mật khẩu<input name="password" type="password" required autocomplete="current-password"></label><label class="field" id="registerOption"><span><input name="register" type="checkbox" value="1"> Tạo tài khoản thành viên mới</span></label><div id="authError" role="alert" style="color:#a32838;font-size:12px"></div><div class="modal-actions"><button class="button light" type="button" data-auth-close>Hủy</button><button class="button orange" id="authSubmit" type="submit">Đăng nhập</button></div></form>'; $('authBackdrop').classList.add('show');$('authRole').addEventListener('change',function(){$('registerOption').classList.toggle('hidden',this.value==='admin');$('authSubmit').textContent=this.value==='admin'||!$('authForm').elements.register.checked?'Đăng nhập':'Tạo tài khoản';});$('authForm').elements.register.addEventListener('change',function(){$('authSubmit').textContent=this.checked?'Tạo tài khoản':'Đăng nhập';});$('authForm').addEventListener('submit',function(event){event.preventDefault();var form=event.currentTarget,data=new FormData(form),role=$('authRole').value,body={username:String(data.get('username')||'').trim(),password:String(data.get('password')||'')},register=role==='member'&&data.get('register')==='1';request('POST',role==='admin'?'/api/login':register?'/api/user/register':'/api/user/login',body).then(function(response){if(response._status!==200){$('authError').textContent=response.error||'Đăng nhập thất bại.';return;}communityUser=role==='member'?response.user:null;communityAdmin=role==='admin';sessionPromise=null;var action=communityUser?pendingMemberAction:null;pendingMemberAction=null;$('authBackdrop').classList.remove('show');updateIdentity();refreshPosts();if(communityAdmin)setView('admin');say(communityAdmin?'Đã đăng nhập admin.':'Đã đăng nhập thành viên.');if(action)action();}).catch(function(error){console.error('[SONNA] Login failed:',error);$('authError').textContent='Không kết nối được máy chủ.';});}); }
+  function refreshPosts(){return request('GET','/api/community/posts').then(function(response){if(response._status!==200)throw new Error(response.error||'Không tải được bài viết.');posts=response.posts||[];userPosts=posts.filter(function(post){return communityUser&&post.author===communityUser.username;});renderPosts();if(activeView==='admin')renderAdmin();if(communityUser)refreshNotifications();}).catch(function(error){console.error('[SONNA] Community posts unavailable:',error);say('Không tải được bài viết từ máy chủ. Thử tải lại trang.');});}
+  function refreshNotifications(){if(!communityUser){$('notificationCount').classList.add('hidden');return Promise.resolve();}return request('GET','/api/community/notifications').then(function(response){if(response._status!==200)throw new Error(response.error||'Không tải được thông báo.');var count=Number(response.unreadCount)||0;$('notificationCount').textContent=count>99?'99+':String(count);$('notificationCount').classList.toggle('hidden',count===0);if(activeView==='notifications')renderNotifications(response);}).catch(function(error){console.error('[SONNA] Notification load failed:',error);});}
+  function renderNotifications(response){if(!communityUser){$('notificationList').innerHTML='<div class="forum-empty">Đăng nhập thành viên để xem thông báo.</div>';return;}var load=response?Promise.resolve(response):request('GET','/api/community/notifications');load.then(function(data){if(data._status&&data._status!==200)throw new Error(data.error||'Không tải được thông báo.');var rows=data.notifications||[];$('notificationCount').textContent=(Number(data.unreadCount)||0)>99?'99+':String(Number(data.unreadCount)||0);$('notificationCount').classList.toggle('hidden',!Number(data.unreadCount));$('notificationList').innerHTML=rows.length?rows.map(function(item){return '<button type="button" class="notification-item '+(item.readAt?'':'unread')+'" data-notification="'+esc(item.id)+'" data-notification-post="'+esc(item.postId)+'"><strong>'+esc(item.text)+'</strong><span class="muted">'+esc(item.createdAt?new Date(item.createdAt).toLocaleString('vi-VN'):'')+'</span></button>';}).join(''):'<div class="forum-empty">Chưa có thông báo mới.</div>';}).catch(function(error){console.error('[SONNA] Notification render failed:',error);say(error.message);});}
+  function esc(value){return String(value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});}
+  function money(value){return new Intl.NumberFormat('vi-VN').format(value)+'₫';}
+  function persist(){try{localStorage.setItem(storageKey,JSON.stringify({orders:orders,liked:Array.from(liked),posts:userPosts,postComments:posts.reduce(function(result,post){if(post.comments&&post.comments.length)result[post.id]=post.comments;return result;},{})}));}catch(error){console.error('[SONNA demo] Không thể lưu dữ liệu trong trình duyệt:',error);say('Không lưu được dữ liệu demo. Bộ nhớ trình duyệt có thể đã đầy.');}}
+  function say(message){var node=$('toast');node.textContent=message;node.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(function(){node.classList.remove('show');},3000);}
+  function openImageDb(){if(imageDbPromise)return imageDbPromise;imageDbPromise=new Promise(function(resolve,reject){if(!window.indexedDB){reject(new Error('Trình duyệt không hỗ trợ lưu ảnh demo.'));return;}var request=indexedDB.open('sonna-community-demo-images',1);request.onupgradeneeded=function(){if(!request.result.objectStoreNames.contains('images'))request.result.createObjectStore('images',{keyPath:'id'});};request.onsuccess=function(){resolve(request.result);};request.onerror=function(){reject(request.error||new Error('Không mở được kho ảnh demo.'));};});return imageDbPromise;}
+  function saveImage(file){return openImageDb().then(function(db){return new Promise(function(resolve,reject){var id='img-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10),tx=db.transaction('images','readwrite');tx.objectStore('images').put({id:id,blob:file,type:file.type,name:file.name});tx.oncomplete=function(){resolve({id:id,name:file.name,type:file.type});};tx.onerror=function(){reject(tx.error||new Error('Không lưu được ảnh.'));};});});}
+  function readImage(id){return openImageDb().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('images','readonly'),request=tx.objectStore('images').get(id);request.onsuccess=function(){resolve(request.result||null);};request.onerror=function(){reject(request.error||new Error('Không đọc được ảnh.'));};});});}
+  function hydratePostImages(){posts.forEach(function(post){(post.images||[]).forEach(function(image){var containers=Array.prototype.filter.call(document.querySelectorAll('[data-image-container]'),function(container){return container.dataset.imageContainer===String(post.id);});if(!containers.length)return;if(typeof image==='string'){containers.forEach(function(container){appendPostImage(container,image,image);});return;}var key=image.id;if(imageUrls[key]){containers.forEach(function(container){appendPostImage(container,image,imageUrls[key]);});return;}readImage(key).then(function(record){if(!record)return;imageUrls[key]=URL.createObjectURL(record.blob);var current=Array.prototype.filter.call(document.querySelectorAll('[data-image-container]'),function(container){return container.dataset.imageContainer===String(post.id);});current.forEach(function(container){appendPostImage(container,image,imageUrls[key]);});}).catch(function(error){console.error('[SONNA demo] Không thể tải ảnh bài viết:',error);});});});}
+  function appendPostImage(container,image,url){var key=typeof image==='string'?image:image.id;if(container.querySelector('[data-image-id="'+key+'"]'))return;var img=document.createElement('img');img.src=url;img.alt=typeof image==='string'?'Ảnh đính kèm bài viết':image.name?'Ảnh đính kèm: '+image.name:'Ảnh đính kèm bài viết';img.dataset.imageId=key;container.appendChild(img);}
+  function setView(view){
+    activeView=view;
+    ['forum','market','orders','admin','chat','profile','notifications'].forEach(function(name){$(name+'View').classList.toggle('hidden',view!==name);});
+    $('forumTab').classList.toggle('active',view==='forum');
+    $('marketTab').classList.toggle('active',view==='market'||view==='orders'||view==='admin');
+    $('chatTab').classList.toggle('active',view==='chat');
+    $('notificationsTab').classList.toggle('active',view==='notifications');
+    $('adminTab').classList.toggle('active',view==='admin');
+    $('eyebrow').textContent=view==='forum'?'CỘNG ĐỒNG SONNA':view==='admin'?'QUẢN TRỊ CỘNG ĐỒNG':view==='chat'?'KẾT NỐI THÀNH VIÊN':view==='profile'?'HỒ SƠ THÀNH VIÊN':view==='notifications'?'HOẠT ĐỘNG CỘNG ĐỒNG':'CHỢ THÀNH VIÊN · DEMO';
+    $('pageTitle').textContent=view==='forum'?'Diễn đàn giao lưu':view==='orders'?'Đơn demo của tôi':view==='admin'?'Kiểm duyệt cộng đồng · Admin':view==='chat'?'Chat thành viên':view==='notifications'?'Thông báo':view==='profile'?(activeProfile||'Hồ sơ thành viên'):'Chợ tài khoản thành viên';
+    $('pageSub').textContent=view==='forum'?'Chia sẻ kinh nghiệm, tìm đồng đội và cùng xây dựng cộng đồng.':view==='admin'?'Duyệt bài, xử lý báo cáo, ghim hoặc khóa bài và quản lý thành viên.':view==='chat'?'Phòng chat chung hoặc nhắn riêng với thành viên SONNA.':view==='notifications'?'Theo dõi phản hồi và lượt nhắc tên trong bài viết.':view==='profile'?'Thông tin công khai và các bài đăng của thành viên.':'Tìm hiểu giao diện giao dịch bảo đảm — không có thanh toán thật.';
+    $('heroAction').classList.toggle('hidden',view==='chat'||view==='notifications');
+    $('heroAction').textContent=view==='forum'?'＋ Đăng bài':view==='market'?'Đơn demo của tôi':view==='orders'?'Bảng admin demo':view==='profile'?'← Quay lại diễn đàn':'← Chợ thành viên';
+    $('heroAction').classList.toggle('light',view==='orders'||view==='admin');
+    $('heroAction').classList.toggle('orange',view==='forum'||view==='market');
+    $('heroAction').onclick=function(){if(view==='forum')openPostModal();else if(view==='market')setView('orders');else if(view==='orders')setView('admin');else if(view==='profile')setView('forum');else setView('market');};
+    if(view==='orders')renderOrders();
+    if(view==='admin')renderAdmin();
+    if(view==='chat')renderChat();
+    if(view==='notifications')renderNotifications();
+    if(view==='profile')renderProfile(activeProfile);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function renderChips(){
+    $('categoryChips').innerHTML=categories.map(function(cat){return '<button type="button" class="chip '+(cat===selectedCategory?'active':'')+'" data-category="'+esc(cat)+'">'+esc(cat)+'</button>';}).join('');
+  }
+  function renderPosts(){
+    var query=$('postSearch').value.trim().toLocaleLowerCase('vi');
+    var visible=posts.filter(function(post){return(selectedCategory==='Tất cả'||post.category===selectedCategory)&&(!query||(post.title+' '+post.body+' '+post.author).toLocaleLowerCase('vi').includes(query));});
+    visible.sort(function(a,b){return Number(!!b.pinned)-Number(!!a.pinned);});
+    $('postFeed').innerHTML=visible.length?visible.map(function(post){
+      var commentHTML=post.comments.map(function(comment){return '<p class="comment"><button type="button" class="member-link" data-member="'+esc(comment[0])+'">'+esc(comment[0])+'</button>: '+esc(comment[1])+'</p>';}).join('');
+      var likedPost=liked.has(String(post.id))||!!post.likedByMe;
+      return '<article class="post '+(post.pinned?'pinned':'')+'" data-post="'+esc(post.id)+'"><div class="post-top"><span class="avatar">'+esc(post.initial)+'</span><div class="post-user"><button type="button" class="member-link" data-member="'+esc(post.author)+'">'+esc(post.author)+'</button> '+(post.verified?'<span class="badge">✓ Thành viên</span>':'')+'<div class="muted">'+esc(post.time)+' · '+esc(post.category)+'</div></div>'+(post.pinned?'<span class="badge orange">📌 Ghim</span>':'')+(post.locked?'<span class="badge orange">🔒 Đã khóa</span>':'')+(communityAdmin?'<button class="button danger small" type="button" data-delete-post="'+esc(post.id)+'">Xóa bài</button>':'')+'</div><h3>'+esc(post.title)+'</h3><p>'+esc(post.body)+'</p>'+(post.images&&post.images.length?'<div class="post-gallery" data-image-container="'+esc(post.id)+'" aria-label="Ảnh đính kèm"></div>':'')+'<div class="post-actions"><button type="button" class="text-button '+(likedPost?'liked':'')+'" data-action="like" data-id="'+esc(post.id)+'" '+(post.locked?'disabled':'')+'>♥ '+(post.likes||0)+' Thích</button><button type="button" class="text-button" data-action="comments" data-id="'+esc(post.id)+'">💬 '+post.comments.length+' Bình luận</button><button type="button" class="text-button" data-action="report" data-id="'+esc(post.id)+'">⚑ Báo cáo</button></div><div class="comments hidden" id="comments-'+esc(post.id)+'">'+(commentHTML||'<p class="comment">Chưa có bình luận. Hãy mở đầu cuộc trò chuyện.</p>')+(post.locked?'<p class="comment">Bài viết đã khóa tương tác.</p>':'<form class="comment-form" data-comment="'+esc(post.id)+'"><input name="comment" maxlength="240" placeholder="Bình luận... dùng @tên để nhắc thành viên" required><button class="button small" type="submit">Gửi</button></form>')+'</div></article>';
+    }).join(''):'<div class="forum-empty">Chưa có bài phù hợp. Hãy thử đổi chuyên mục hoặc từ khóa.</div>';
+    hydratePostImages();
+  }
+  function feeRate(price){return price<1000000?.07:price<5000000?.05:.03;}
+  function renderMarketChips(){var opts=['Tất cả','Android','iOS'];$('marketChips').innerHTML=opts.map(function(opt){return '<button type="button" class="chip '+(selectedMarket===opt?'active':'')+'" data-platform="'+opt+'">'+opt+'</button>';}).join('');}
+  function renderListings(){
+    var query=$('marketSearch').value.trim().toLocaleLowerCase('vi');
+    var filtered=listings.filter(function(item){return(selectedMarket==='Tất cả'||item.platform===selectedMarket)&&(!query||(item.title+' '+item.platform+' '+item.seller).toLocaleLowerCase('vi').includes(query));});
+    $('listingGrid').innerHTML=filtered.length?filtered.map(function(item){return '<article class="card listing"><div class="listing-art">'+esc(item.platform.toUpperCase())+' · ACCOUNT DEMO</div><div class="listing-body"><div class="listing-meta"><span class="badge purple">'+esc(item.platform)+'</span><span class="badge orange">'+esc(item.rank)+'</span></div><h3 style="margin-top:9px">'+esc(item.title)+'</h3><p>'+esc(item.description)+'</p><div class="seller"><span class="avatar">'+esc(item.initial)+'</span><div><button type="button" class="member-link seller-name" data-member="'+esc(item.seller)+'">'+esc(item.seller)+'</button><br><span class="muted">'+(item.verified?'<span class="trust">✓ SĐT xác minh · demo</span>':'Người bán mới')+' · '+item.sales+' giao dịch · ★ '+item.rating+'</span></div></div><div class="price-row"><span class="price">'+money(item.price)+'</span><span class="muted">Phí '+Math.round(feeRate(item.price)*100)+'%</span></div><button type="button" class="button orange" style="width:100%" data-buy="'+esc(item.id)+'">Mua qua trung gian · Demo</button></div></article>';}).join(''):'<div class="forum-empty">Không có tin phù hợp.</div>';
+  }
+  function renderOrders(){
+    var target=$('ordersList');
+    if(!orders.length){target.innerHTML='<div class="forum-empty">Chưa có đơn demo. Vào Chợ thành viên và bấm “Mua qua trung gian · Demo”.</div>';return;}
+    target.innerHTML=orders.slice().reverse().map(function(order){var step=order.status==='Chờ thanh toán'?0:order.status.indexOf('giữ tiền')>=0?1:order.status==='Đang giao acc'?2:order.status==='Chờ xác nhận'?3:4;var kind=order.status==='Khiếu nại'?'dispute':order.status==='Hoàn tất'||order.status==='Đã hoàn tiền'?'done':'';var actions='';
+      if(order.status==='Chờ thanh toán')actions='<button class="button orange small" data-order-action="pay" data-id="'+esc(order.id)+'">Mô phỏng thanh toán</button>';
+      else if(order.status.indexOf('giữ tiền')>=0)actions='<button class="button small" data-order-action="deliver" data-id="'+esc(order.id)+'">Mô phỏng người bán đã giao acc</button>';
+      else if(order.status==='Đang giao acc')actions='<button class="button small" data-order-action="inspection" data-id="'+esc(order.id)+'">Bắt đầu kiểm tra</button>';
+      else if(order.status==='Chờ xác nhận')actions='<button class="button orange small" data-order-action="confirm" data-id="'+esc(order.id)+'">Xác nhận hoàn tất</button><button class="button danger small" data-order-action="dispute" data-id="'+esc(order.id)+'">Khiếu nại</button>';
+      return '<article class="order"><div class="order-head"><strong>'+esc(order.id)+' · '+esc(order.title)+'</strong><span class="status '+kind+'">'+esc(order.status)+'</span></div><div class="steps">'+[0,1,2,3].map(function(n){return '<span class="step '+(n<=step?'done':'')+'"></span>';}).join('')+'</div><p>Giá '+money(order.price)+' · Phí '+money(order.fee)+' · Người bán nhận '+money(order.price-order.fee)+'</p><p>'+esc(order.note||'Tất cả trạng thái trong đơn này chỉ là mô phỏng.')+'</p><div class="order-actions">'+actions+'</div></article>';
+    }).join('');
+  }
+  function renderAdmin(){
+    if(!communityAdmin){$('adminQueue').innerHTML='<div class="forum-empty">Cần đăng nhập admin để kiểm duyệt.</div>';return;}
+    request('GET','/api/admin/community/posts').then(function(response){
+      if(response._status!==200)throw new Error(response.error||'Không tải được danh sách kiểm duyệt.');
+      var members=response.members||[],allPosts=response.posts||[],reports=response.reports||[],active=members.filter(function(member){return !member.locked;}).length,locked=members.length-active,pending=allPosts.filter(function(post){return post.status==='pending';}).length;
+      $('adminMetrics').innerHTML='<div class="metric"><span>Bài chờ duyệt</span><strong>'+pending+'</strong></div><div class="metric"><span>Báo cáo đang mở</span><strong>'+reports.length+'</strong></div><div class="metric"><span>Thành viên hoạt động</span><strong>'+active+'</strong></div><div class="metric"><span>Tài khoản bị khóa</span><strong>'+locked+'</strong></div>';
+      $('adminQueue').innerHTML=allPosts.length?allPosts.map(function(post){
+        var actions=post.status==='pending'?'<button class="button orange small" type="button" data-moderate-post="approve" data-id="'+esc(post.id)+'">Duyệt bài</button> <button class="button light small" type="button" data-moderate-post="reject" data-id="'+esc(post.id)+'">Từ chối</button> ':'';
+        var images=(post.images||[]).map(function(image){return '<img src="'+esc(image)+'" alt="Ảnh đính kèm bài viết">';}).join('');
+        return '<article class="profile-post"><h3>'+esc(post.title)+'</h3><p>'+esc(post.author)+' · '+esc(post.category)+' · '+esc(post.time)+' · '+(post.status==='pending'?'Chờ duyệt':post.status==='rejected'?'Đã từ chối':'Đã duyệt')+'</p><p>'+esc(post.body)+'</p>'+(images?'<div class="admin-post-images">'+images+'</div>':'')+actions+'<button class="button light small" type="button" data-moderate-post="pin" data-id="'+esc(post.id)+'">'+(post.pinned?'Bỏ ghim':'Ghim bài')+'</button> <button class="button light small" type="button" data-moderate-post="lock" data-id="'+esc(post.id)+'">'+(post.locked?'Mở khóa bình luận':'Khóa bình luận')+'</button> <button class="button danger small" type="button" data-delete-post="'+esc(post.id)+'">Xóa bài</button></article>';
+      }).join(''):'<div class="forum-empty">Chưa có bài viết cần kiểm duyệt.</div>';
+      $('adminReports').innerHTML=reports.length?reports.map(function(report){return '<article class="profile-post"><h3>'+esc(report.postTitle)+'</h3><p>Báo cáo bởi '+esc(report.reporter)+' · '+esc(report.reason)+'</p><button class="button light small" type="button" data-open-reported-post="'+esc(report.postId)+'">Xem bài</button> <button class="button small" type="button" data-resolve-report="'+esc(report.id)+'">Đóng báo cáo</button></article>';}).join(''):'<div class="forum-empty">Không có báo cáo đang chờ.</div>';
+      $('adminMembers').innerHTML=members.length?members.map(function(member){return '<article class="profile-post"><strong>'+esc(member.username)+'</strong><div class="profile-post-meta">'+member.postCount+' bài đăng · '+(member.locked?'Đã khóa':'Đang hoạt động')+' · '+(member.postWithoutApproval?'Được đăng trực tiếp':'Bài cần duyệt')+'</div><button class="button small" type="button" data-post-approval-member="'+member.id+'" data-enabled="'+member.postWithoutApproval+'">'+(member.postWithoutApproval?'Thu hồi quyền đăng trực tiếp':'Cấp quyền đăng không cần duyệt')+'</button> <button class="button '+(member.locked?'small':'danger small')+'" type="button" data-lock-member="'+member.id+'" data-locked="'+member.locked+'">'+(member.locked?'Mở khóa':'Kick & khóa')+'</button></article>';}).join(''):'<div class="forum-empty">Chưa có thành viên.</div>';
+    }).catch(function(error){console.error('[SONNA] Admin moderation load failed:',error);say(error.message);});
+  }
+  function renderChat(){
+    var list=$('chatList');
+    list.innerHTML=chatMembers.map(function(member){var messages=chatMessages[member.id]||[],last=messages.length?messages[messages.length-1].text:(member.id==='group'?'Phòng chat chung':'Bắt đầu trò chuyện');return '<button type="button" class="chat-person '+(activeChat===member.id?'active':'')+'" data-chat="'+esc(member.id)+'"><span class="avatar">'+esc(member.initial)+'</span><span><strong>'+esc(member.name)+'</strong><small>'+esc(last.slice(0,36))+'</small></span></button>';}).join('');
+    var member=chatMembers.find(function(item){return item.id===activeChat;})||chatMembers[0];
+    $('chatAvatar').textContent=member.initial;$('chatTitle').textContent=member.name;$('chatSubtitle').textContent=member.subtitle;
+    $('chatProfile').classList.toggle('hidden',activeChat==='group');
+    $('chatProfile').dataset.member=member.name;
+    $('chatNotice').textContent=communityUser?'Tin nhắn được lưu trên máy chủ; tin riêng chỉ hiển thị cho hai thành viên. Không gửi mật khẩu, mã OTP hay thông tin riêng tư.':'Đăng nhập thành viên để gửi tin nhắn. Không gửi mật khẩu, mã OTP hay thông tin riêng tư.';
+    $('chatForm').querySelector('button').disabled=!communityUser;
+    if(!communityUser){$('chatMessages').innerHTML='<div class="forum-empty">Đăng nhập thành viên để xem và gửi tin nhắn.</div>';return;}
+    var url='/api/community/chat'+(activeChat==='group'?'':'?with='+encodeURIComponent(member.name));
+    request('GET',url).then(function(response){if(response._status===401){$('chatMessages').innerHTML='<div class="forum-empty">Đăng nhập thành viên để xem và gửi tin nhắn.</div>';return;}if(response._status!==200)throw new Error(response.error||'Không tải được chat.');var messages=response.messages||[];chatMessages[member.id]=messages;$('chatMessages').innerHTML=messages.length?messages.map(function(message){return '<div class="chat-message '+(communityUser&&message.author===communityUser.username?'mine':'')+'"><strong><button type="button" class="member-link" data-member="'+esc(message.author)+'">'+esc(message.author)+'</button></strong>'+esc(message.text)+'<time>'+esc(message.time||'')+'</time></div>';}).join(''):'<div class="forum-empty">Chưa có tin nhắn. Hãy bắt đầu trò chuyện.</div>';$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}).catch(function(error){console.error('[SONNA] Chat load failed:',error);say(error.message);});
+  }
+  function renderProfile(username){
+    var memberPosts=posts.filter(function(post){return post.author===username;});
+    var initial=memberPosts[0]&&memberPosts[0].initial||String(username||'?').slice(0,1).toUpperCase();
+    var likes=memberPosts.reduce(function(total,post){return total+(Number(post.likes)||0);},0);
+    var postHTML=memberPosts.length?memberPosts.map(function(post){return '<article class="profile-post"><h3>'+esc(post.title)+'</h3><p>'+esc(post.body)+'</p><div class="profile-post-meta">'+esc(post.category)+' · '+esc(post.time)+' · ♥ '+(Number(post.likes)||0)+' · '+post.comments.length+' bình luận</div>'+(post.images&&post.images.length?'<div class="post-gallery" data-image-container="'+esc(post.id)+'" aria-label="Ảnh đính kèm"></div>':'')+'</article>';}).join(''):'<div class="forum-empty">Thành viên này chưa có bài đăng công khai.</div>';
+    var profileId=profileData&&profileData.profile?profileData.profile.id:'';
+    var postCount=profileData&&profileData.profile?profileData.profile.postCount:memberPosts.length;
+    var reputation=profileData&&profileData.profile?profileData.profile.reputation:likes;
+    var rank=profileData&&profileData.profile?profileData.profile.rank:'Thành viên';
+    $('profileContent').innerHTML='<div class="panel-head"><h2>Hồ sơ thành viên</h2><span class="badge">'+esc(rank)+'</span></div><div class="profile-head"><span class="profile-avatar">'+esc(initial)+'</span><div class="profile-main"><h2>'+esc(username)+'</h2><p>Thành viên cộng đồng SONNA · '+esc(rank)+'</p><div class="profile-stats"><span class="profile-stat"><b>'+postCount+'</b> bài đăng</span><span class="profile-stat"><b>'+reputation+'</b> uy tín (lượt thích)</span></div></div><button class="button orange" type="button" data-start-chat="'+esc(username)+'">Nhắn riêng</button>'+(communityAdmin&&profileId?'<button class="button danger small" type="button" data-lock-member="'+profileId+'" data-locked="'+!!profileData.profile.locked+'">'+(profileData.profile.locked?'Mở khóa':'Kick & khóa')+'</button>':'')+'</div><section style="margin-top:18px"><div class="panel-head"><h2>Bài đăng của '+esc(username)+'</h2></div>'+postHTML+'</section>';
+    hydratePostImages();
+  }
+  function openProfile(username){
+    activeProfile=String(username||'').trim();
+    if(!activeProfile)return;
+    profileData=null;
+    request('GET','/api/community/members/'+encodeURIComponent(activeProfile)).then(function(response){profileData=response._status===200?response:null;if(profileData){posts=posts.filter(function(post){return post.author!==activeProfile;}).concat(profileData.posts||[]);}renderProfile(activeProfile);setView('profile');}).catch(function(error){console.error('[SONNA] Profile load failed:',error);renderProfile(activeProfile);setView('profile');});
+  }
+  function openPrivateChat(username){
+    if(!communityUser){ensureMember(function(){openPrivateChat(username);});return;}
+    var member=chatMembers.find(function(entry){return entry.name===username;});
+    if(!member){member={id:'dm-'+username,name:username,initial:String(username).slice(0,1).toUpperCase(),subtitle:'Thành viên'};chatMembers.push(member);}
+    if(member.id==='group'||member.name===communityUser.username){say('Chọn một thành viên khác để mở tin nhắn riêng.');return;}
+    if(!chatMessages[member.id])chatMessages[member.id]=[];
+    activeChat=member.id;
+    setView('chat');
+  }
+  var baseUpdateIdentity=updateIdentity;
+  updateIdentity=function(){
+    baseUpdateIdentity();
+    $('communityAuth').classList.toggle('admin-login',communityAdmin);
+    $('currentAvatar').classList.toggle('admin-avatar',communityAdmin);
+    if(communityAdmin){$('communityAuth').textContent='SONNA Admin';$('currentAvatar').textContent='★';}
+  };
+  var baseRenderPosts=renderPosts;
+  renderPosts=function(){
+    baseRenderPosts();
+    posts.filter(function(post){return post.isAdmin;}).forEach(function(post){
+      var article=document.querySelector('[data-post="'+esc(post.id)+'"]');
+      if(!article)return;
+      var author=article.querySelector('.post-user button.member-link[data-member="SONNA Admin"]');
+      if(author){var label=document.createElement('strong');label.className='admin-post-author';label.textContent='SONNA Admin';author.replaceWith(label);}
+      var user=article.querySelector('.post-user');
+      if(user&&!user.querySelector('.badge.admin'))user.insertAdjacentHTML('beforeend',' <span class="badge admin">★ QUẢN TRỊ VIÊN</span>');
+    });
+  };
+  var baseRenderAdmin=renderAdmin;
+  renderAdmin=function(){
+    baseRenderAdmin();
+    window.setTimeout(function(){
+      Array.prototype.forEach.call($('adminMembers').querySelectorAll('.profile-post'),function(card){
+        if(card.querySelector('[data-start-chat]'))return;
+        var name=card.querySelector('strong');
+        if(!name)return;
+        var button=document.createElement('button');
+        button.type='button';button.className='button small';button.textContent='Nhắn riêng';button.dataset.startChat=name.textContent;
+        card.appendChild(button);
+      });
+    },0);
+  };
+  openPrivateChat=function(username){
+    if(!communityUser&&!communityAdmin){ensureMember(function(){openPrivateChat(username);});return;}
+    var member=chatMembers.find(function(entry){return entry.name===username;});
+    if(!member){member={id:'dm-'+username,name:username,initial:String(username).slice(0,1).toUpperCase(),subtitle:communityAdmin?'Thành viên SONNA':'Quản trị viên SONNA'};chatMembers.push(member);}
+    if(member.id==='group'||communityUser&&member.name===communityUser.username){say('Chọn một thành viên khác để mở tin nhắn riêng.');return;}
+    activeChat=member.id;
+    setView('chat');
+  };
+  var baseOpenPostModal=openPostModal;
+  openPostModal=function(){
+    if(!communityAdmin){baseOpenPostModal();return;}
+    var selectedImages=[];
+    $('modalContent').innerHTML='<h2 id="modalTitle">Đăng bài với tư cách quản trị viên</h2><p>Bài đăng của quản trị viên sẽ hiển thị ngay. Chỉ nhận ảnh JPEG, PNG, WebP hoặc GIF, tối đa 8 ảnh.</p><form id="adminPostForm"><label class="field">Chuyên mục<select name="category">'+categories.slice(1).map(function(category){return '<option>'+esc(category)+'</option>';}).join('')+'</select></label><label class="field">Tiêu đề<input name="title" maxlength="100" required></label><label class="field">Nội dung<textarea name="body" maxlength="1200" required></textarea></label><label class="field">Ảnh đính kèm<input name="images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><span id="adminPostImageHelp">Có thể chọn nhiều ảnh (tối đa 8 MB mỗi ảnh).</span></label><label class="field">Hoặc dán link ảnh (mỗi dòng một link https://)<textarea name="imageLinks" rows="2" placeholder="https://i.ibb.co/..."></textarea></label><div class="modal-actions"><button class="button light" type="button" data-close>Hủy</button><button class="button orange" type="submit">Đăng bài</button></div></form>';
+    showModal();
+    var form=$('adminPostForm');
+    form.elements.images.addEventListener('change',function(event){
+      var valid=[],errors=[];
+      Array.prototype.slice.call(event.target.files||[]).forEach(function(file){
+        if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)){errors.push(file.name+': định dạng ảnh không hỗ trợ.');return;}
+        if(file.size>8*1024*1024){errors.push(file.name+': vượt quá 8 MB.');return;}
+        valid.push(file);
+      });
+      if(valid.length>8){errors.push('Mỗi bài viết tối đa 8 ảnh.');valid=valid.slice(0,8);}
+      selectedImages=valid;
+      $('adminPostImageHelp').textContent=errors.length?errors.join(' '):'Đã chọn '+valid.length+' ảnh.';
+    });
+    form.addEventListener('submit',function(event){
+      event.preventDefault();
+      var data=new FormData(form),button=form.querySelector('[type="submit"]');
+      var title=String(data.get('title')||'').trim(),body=String(data.get('body')||'').trim();
+      if(!title||!body)return;
+      var links=String(data.get('imageLinks')||'').split(/\s+/).map(function(link){return link.trim();}).filter(Boolean);
+      if(links.some(function(link){return !/^https:\/\/\S+$/i.test(link);})){$('adminPostImageHelp').textContent='Link ảnh phải bắt đầu bằng https:// (mỗi dòng một link).';return;}
+      if(selectedImages.length+links.length>8){$('adminPostImageHelp').textContent='Mỗi bài viết tối đa 8 ảnh (gồm ảnh chọn từ máy và link).';return;}
+      button.disabled=true;button.textContent='Đang tải ảnh...';
+      Promise.all(selectedImages.map(function(file){
+        return fileToDataUrl(file).then(function(dataUrl){
+          return request('POST','/api/admin/upload',{dataUrl:dataUrl}).then(function(result){
+            if(result._status!==200)throw new Error(result.error||'Không tải được ảnh lên máy chủ.');
+            return result.url;
+          });
+        });
+      })).then(function(images){
+        button.textContent='Đang đăng...';
+        return request('POST','/api/admin/community/posts',{category:String(data.get('category')),title:title,body:body,images:images.concat(links)});
+      }).then(function(result){
+        if(result._status!==201)throw new Error(result.error||'Không thể đăng bài.');
+        hideModal();refreshPosts();renderAdmin();say('Bài viết của quản trị viên đã được đăng công khai.');
+      }).catch(function(error){
+        console.error('[SONNA] Admin post submit failed:',error);
+        button.disabled=false;button.textContent='Thử đăng lại';say(error.message);
+      });
+    });
+  };
+  renderChat=function(){
+    if(communityUser&&!communityAdmin&&!chatMembers.some(function(member){return member.name==='SONNA Admin';})){
+      chatMembers.push({id:'dm-admin',name:'SONNA Admin',initial:'★',subtitle:'Quản trị viên SONNA'});
+    }
+    var list=$('chatList');
+    list.innerHTML=chatMembers.map(function(member){
+      var messages=chatMessages[member.id]||[],last=messages.length?messages[messages.length-1].text:(member.id==='group'?'Phòng chat chung':'Bắt đầu trò chuyện');
+      return '<button type="button" class="chat-person '+(activeChat===member.id?'active':'')+'" data-chat="'+esc(member.id)+'"><span class="avatar '+(member.name==='SONNA Admin'?'admin-avatar':'')+'">'+esc(member.initial)+'</span><span><strong>'+esc(member.name)+'</strong><small>'+esc(last.slice(0,36))+'</small></span></button>';
+    }).join('');
+    var member=chatMembers.find(function(item){return item.id===activeChat;})||chatMembers[0];
+    $('chatAvatar').textContent=member.initial;$('chatAvatar').classList.toggle('admin-avatar',member.name==='SONNA Admin');$('chatTitle').textContent=member.name;$('chatSubtitle').textContent=member.subtitle;
+    $('chatProfile').classList.toggle('hidden',activeChat==='group'||member.name==='SONNA Admin');
+    $('chatProfile').dataset.member=member.name;
+    var canChat=!!(communityUser||communityAdmin);
+    $('chatNotice').textContent=communityAdmin?'Tin nhắn riêng với thành viên được lưu trên máy chủ và chỉ hiển thị cho hai bên.':'Tin nhắn được lưu trên máy chủ; tin riêng chỉ hiển thị cho hai bên. Không gửi mật khẩu, mã OTP hay thông tin riêng tư.';
+    $('chatForm').querySelector('button').disabled=!canChat;
+    if(!canChat){$('chatMessages').innerHTML='<div class="forum-empty">Đăng nhập để xem và gửi tin nhắn.</div>';return;}
+    var query=activeChat==='group'?'':'?with='+encodeURIComponent(member.name);
+    var endpoint=communityAdmin?'/api/admin/community/chat':'/api/community/chat';
+    request('GET',endpoint+query).then(function(response){
+      if(response._status!==200)throw new Error(response.error||'Không tải được chat.');
+      var messages=response.messages||[];
+      chatMessages[member.id]=messages;
+      $('chatMessages').innerHTML=messages.length?messages.map(function(message){
+        var mine=message.isAdmin?communityAdmin:!!communityUser&&message.author===communityUser.username;
+        var author=message.isAdmin?'<strong class="admin-post-author">★ SONNA Admin</strong>':'<strong>'+esc(message.author)+'</strong>';
+        return '<div class="chat-message '+(mine?'mine':'')+'">'+author+esc(message.text)+'<time>'+esc(message.time||'')+'</time></div>';
+      }).join(''):'<div class="forum-empty">Chưa có tin nhắn. Hãy bắt đầu trò chuyện.</div>';
+      $('chatMessages').scrollTop=$('chatMessages').scrollHeight;
+    }).catch(function(error){console.error('[SONNA] Chat load failed:',error);say(error.message);});
+  };
+  document.addEventListener('submit',function(event){
+    var form=event.target;
+    if(form.id!=='chatForm'||!communityAdmin)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    var text=String(new FormData(form).get('message')||'').trim();
+    if(!text)return;
+    var member=chatMembers.find(function(entry){return entry.id===activeChat;})||chatMembers[0],body={text:text};
+    if(member.id!=='group')body.with=member.name;
+    request('POST','/api/admin/community/chat',body).then(function(response){
+      if(response._status!==201)throw new Error(response.error||'Không gửi được tin nhắn.');
+      form.reset();renderChat();
+    }).catch(function(error){console.error('[SONNA] Admin chat send failed:',error);say(error.message);});
+  },true);
+  if(new URLSearchParams(location.search).get('login')==='1'){
+    syncSession().then(function(){if(!communityUser&&!communityAdmin)openAuthModal();}).catch(function(error){console.error('[SONNA] Login page session check failed:',error);openAuthModal();});
+  }
+  function openReportModal(postId){$('modalContent').innerHTML='<h2 id="modalTitle">Báo cáo bài viết</h2><p>Chọn lý do rõ ràng để quản trị viên xem xét. Báo cáo không tự động xóa bài.</p><form id="reportForm" data-report-post="'+esc(postId)+'"><label class="field">Lý do báo cáo<textarea name="reason" maxlength="300" required placeholder="Spam, nội dung xúc phạm, lộ thông tin cá nhân..."></textarea></label><div class="modal-actions"><button class="button light" type="button" data-close>Hủy</button><button class="button danger" type="submit">Gửi báo cáo</button></div></form>';showModal();}
+  function fileToDataUrl(file){return new Promise(function(resolve,reject){var reader=new FileReader();reader.onload=function(){resolve(String(reader.result||''));};reader.onerror=function(){reject(reader.error||new Error('Không đọc được ảnh.'));};reader.readAsDataURL(file);});}
+  function uploadImage(file){return fileToDataUrl(file).then(function(dataUrl){return request('POST','/api/community/images',{dataUrl:dataUrl});}).then(function(result){if(result._status!==201)throw new Error(result.error||'Không tải được ảnh lên máy chủ.');return result.url;});}
+  function openPostModal(){
+    if(!communityUser){ensureMember(openPostModal);return;}
+    var selectedImages=[], previewUrls=[];
+    $('modalContent').innerHTML='<h2 id="modalTitle">Tạo bài viết</h2><p>Dùng chung tài khoản thành viên cửa hàng SONNA. Bài sẽ được duyệt trước khi công khai, trừ khi admin cấp quyền đăng trực tiếp. Chỉ nhận ảnh JPEG, PNG, WebP hoặc GIF — video không được hỗ trợ.</p><form id="newPostForm"><label class="field">Chuyên mục<select name="category">'+categories.slice(1).map(function(cat){return '<option>'+esc(cat)+'</option>';}).join('')+'</select></label><label class="field">Tiêu đề<input name="title" maxlength="100" required placeholder="Nhập tiêu đề bài viết"></label><label class="field">Nội dung<textarea name="body" maxlength="1200" required placeholder="Chia sẻ với cộng đồng..."></textarea></label><label class="field">Đính kèm ảnh (tối đa 8 ảnh, mỗi ảnh 8 MB)<input id="postImages" name="images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><span id="imageHelp">Có thể chọn nhiều ảnh cùng lúc. Video không được chấp nhận.</span><div class="image-preview" id="imagePreview"></div></label><div class="modal-actions"><button class="button light" type="button" data-close>Hủy</button><button class="button orange" id="submitPost" type="submit">Đăng bài</button></div></form>';
+    showModal();
+    function drawPreview(){previewUrls.forEach(function(url){URL.revokeObjectURL(url);});previewUrls=[];$('imagePreview').innerHTML='';selectedImages.forEach(function(file,index){var url=URL.createObjectURL(file);previewUrls.push(url);var item=document.createElement('div');item.className='image-preview-item';var image=document.createElement('img');image.src=url;image.alt=file.name;var remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Gỡ ảnh '+file.name);remove.dataset.removeImage=String(index);item.appendChild(image);item.appendChild(remove);$('imagePreview').appendChild(item);});}
+    $('postImages').addEventListener('change',function(event){var next=Array.prototype.slice.call(event.target.files||[]),valid=[],errors=[];next.forEach(function(file){if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)){errors.push(file.name+': chỉ nhận JPG, PNG, WebP hoặc GIF.');return;}if(file.size>8*1024*1024){errors.push(file.name+': vượt quá 8 MB.');return;}valid.push(file);});if(selectedImages.length+valid.length>8){errors.push('Mỗi bài viết được đính kèm tối đa 8 ảnh.');valid=valid.slice(0,Math.max(0,8-selectedImages.length));}selectedImages=selectedImages.concat(valid);$('imageHelp').textContent=errors.length?errors.join(' '):(selectedImages.length?'Đã chọn '+selectedImages.length+' ảnh. Có thể tiếp tục chọn thêm.':'Có thể chọn nhiều ảnh cùng lúc. Video không được chấp nhận.');event.target.value='';drawPreview();});
+    $('newPostForm').addEventListener('click',function(event){var remove=event.target.closest('[data-remove-image]');if(!remove)return;selectedImages.splice(Number(remove.dataset.removeImage),1);drawPreview();$('imageHelp').textContent=selectedImages.length?'Đã chọn '+selectedImages.length+' ảnh.':'Có thể chọn nhiều ảnh cùng lúc. Video không được chấp nhận.';});
+    $('newPostForm').addEventListener('submit',function(event){event.preventDefault();var form=event.currentTarget,data=new FormData(form),title=String(data.get('title')||'').trim(),body=String(data.get('body')||'').trim(),button=$('submitPost');if(!title||!body)return;button.disabled=true;button.textContent='Đang tải ảnh...';Promise.all(selectedImages.map(uploadImage)).then(function(images){button.textContent='Đang gửi bài...';return request('POST','/api/community/posts',{category:String(data.get('category')),title:title,body:body,images:images});}).then(function(result){if(result._status!==201)throw new Error(result.error||'Không thể gửi bài.');hideModal();previewUrls.forEach(function(url){URL.revokeObjectURL(url);});refreshPosts();say(result.post&&result.post.status==='approved'?'Bài viết đã được đăng công khai.':'Đã gửi bài chờ quản trị viên duyệt.');}).catch(function(error){console.error('[SONNA] Community post submit failed:',error);button.disabled=false;button.textContent='Thử gửi lại';say(error.message);});});
+  }
+  function openBuyModal(id){var item=listings.find(function(entry){return entry.id===id;});if(!item)return;var fee=Math.round(item.price*feeRate(item.price));$('modalContent').innerHTML='<h2 id="modalTitle">Tạo đơn trung gian demo</h2><p><b>'+esc(item.title)+'</b> · người bán '+esc(item.seller)+'</p><div class="fee-row"><span>Giá tài khoản</span><b>'+money(item.price)+'</b></div><div class="fee-row"><span>Phí demo ('+Math.round(feeRate(item.price)*100)+'%)</span><b>'+money(fee)+'</b></div><div class="fee-row"><span>Tổng người mua trả trong mô hình</span><b>'+money(item.price)+'</b></div><div class="fee-row"><span>Người bán dự kiến nhận</span><b>'+money(item.price-fee)+'</b></div><p style="padding:10px;background:#fff5e8;border-radius:9px;color:#70440e"><b>Chỉ là demo:</b> nút dưới không thu tiền, không tạo lệnh chuyển khoản và không liên hệ người bán.</p><div class="modal-actions"><button class="button light" type="button" data-close">Đóng</button><button class="button orange" id="createOrderDemo" type="button">Tạo đơn thử</button></div>';showModal();$('createOrderDemo').onclick=function(){var order={id:'DEMO-'+String(Date.now()).slice(-6),listingId:item.id,title:item.title,seller:item.seller,price:item.price,fee:fee,status:'Chờ thanh toán',createdAt:new Date().toISOString(),note:'Đơn thử nghiệm — chưa thanh toán, chưa giữ tiền và không giao nhận tài khoản.'};orders.push(order);persist();hideModal();setView('orders');say('Đã tạo đơn thử. Không phát sinh thanh toán thật.');};}
+  function showModal(){$('modalBackdrop').classList.add('show');}
+  function hideModal(){$('modalBackdrop').classList.remove('show');}
+  function updateOrder(id,action){var order=orders.find(function(entry){return entry.id===id;});if(!order)return;if(action==='pay'){order.status='Đã giữ tiền (mô phỏng)';order.note='Bước này chỉ đổi trạng thái demo; website không nhận hoặc giữ tiền.';}else if(action==='deliver'){order.status='Đang giao acc';order.note='Người bán demo đã đánh dấu bàn giao; không có thông tin tài khoản thật.';}else if(action==='inspection'){order.status='Chờ xác nhận';order.note='Bắt đầu thời hạn kiểm tra minh họa. Không nên dùng làm cam kết giao dịch thật.';}else if(action==='confirm'){order.status='Hoàn tất';order.note='Hoàn tất demo — không có giải ngân thật.';}else if(action==='dispute'){order.status='Khiếu nại';order.note='Khiếu nại demo được chuyển đến bảng admin giả lập.';}else if(action==='refund'){order.status='Đã hoàn tiền';order.note='Admin demo chọn hoàn tiền — không có khoản tiền nào được chuyển.';}else if(action==='release'){order.status='Hoàn tất';order.note='Admin demo chọn giải ngân — không có khoản tiền nào được chuyển.';}persist();renderOrders();renderAdmin();say('Đã cập nhật trạng thái mô phỏng.');}
+  document.addEventListener('click',function(event){var target=event.target.closest('button');if(!target)return;
+    if(target.id==='forumTab'){setView('forum');return;}if(target.id==='marketTab'){setView('market');renderListings();return;}if(target.id==='chatTab'){setView('chat');return;}if(target.id==='notificationsTab'){ensureMember(function(){setView('notifications');});return;}
+    if(target.id==='markNotificationsRead'){if(!communityUser)return;request('POST','/api/community/notifications/read-all',{}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không thể cập nhật thông báo.');return refreshNotifications();}).then(function(){say('Đã đánh dấu thông báo đã đọc.');}).catch(function(error){console.error('[SONNA] Mark notifications read failed:',error);say(error.message);});return;}
+    if(target.dataset.notification){var notificationId=target.dataset.notification,notificationPost=target.dataset.notificationPost;request('POST','/api/community/notifications/'+encodeURIComponent(notificationId)+'/read',{}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không cập nhật được thông báo.');setView('forum');return refreshPosts();}).then(function(){var post=document.querySelector('[data-post="'+notificationPost+'"]');if(post)post.scrollIntoView({behavior:'smooth',block:'center'});}).catch(function(error){console.error('[SONNA] Open notification failed:',error);say(error.message);});return;}
+    if(target.dataset.moderatePost){if(!communityAdmin)return;var action=target.dataset.moderatePost,postId=target.dataset.id;request('POST','/api/admin/community/posts/'+encodeURIComponent(postId)+'/moderate',{action:action}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không thể cập nhật bài viết.');return Promise.all([refreshPosts(),Promise.resolve()]);}).then(function(){renderAdmin();say(action==='approve'?'Đã duyệt bài viết.':action==='reject'?'Đã từ chối bài viết.':action==='pin'?'Đã cập nhật trạng thái ghim.':'Đã cập nhật trạng thái khóa.');}).catch(function(error){console.error('[SONNA] Moderate post failed:',error);say(error.message);});return;}
+    if(target.dataset.resolveReport){if(!communityAdmin)return;request('POST','/api/admin/community/reports/'+encodeURIComponent(target.dataset.resolveReport)+'/resolve',{}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không thể đóng báo cáo.');renderAdmin();say('Đã đóng báo cáo.');}).catch(function(error){console.error('[SONNA] Resolve report failed:',error);say(error.message);});return;}
+    if(target.dataset.openReportedPost){setView('forum');refreshPosts().then(function(){var post=document.querySelector('[data-post="'+target.dataset.openReportedPost+'"]');if(post)post.scrollIntoView({behavior:'smooth',block:'center'});else say('Bài viết đang chờ duyệt hoặc đã bị gỡ.');});return;}
+    if(target.id==='adminTab'&&communityAdmin){setView('admin');return;}if(target.id==='communityAuth'){if(communityUser||communityAdmin){if(communityUser){request('POST','/api/user/logout').then(function(){communityUser=null;updateIdentity();say('Đã đăng xuất.');});}else{request('POST','/api/logout').then(function(){communityAdmin=false;updateIdentity();setView('forum');say('Đã đăng xuất admin.');});}}else openAuthModal();return;}
+    if(target.hasAttribute('data-auth-close')){$('authBackdrop').classList.remove('show');pendingMemberAction=null;return;}
+    if(target.dataset.member){openProfile(target.dataset.member);return;}if(target.dataset.startChat){openPrivateChat(target.dataset.startChat);return;}
+    if(target.dataset.chat){activeChat=target.dataset.chat;if(!chatMessages[activeChat])chatMessages[activeChat]=[];renderChat();return;}
+    if(target.dataset.deletePost){if(!communityAdmin)return;request('DELETE','/api/admin/community/posts/'+encodeURIComponent(target.dataset.deletePost)).then(function(response){if(response._status!==200)throw new Error(response.error||'Không xóa được bài.');posts=posts.filter(function(post){return String(post.id)!==String(target.dataset.deletePost);});renderPosts();renderAdmin();say('Đã xóa bài viết khỏi cộng đồng.');}).catch(function(error){console.error('[SONNA] Delete post failed:',error);say(error.message);});return;}
+    if(target.dataset.postApprovalMember){if(!communityAdmin)return;var permissionButton=target,permissionMemberId=target.dataset.postApprovalMember,enabled=target.dataset.enabled!=='true';permissionButton.disabled=true;request('POST','/api/admin/community/members/'+encodeURIComponent(permissionMemberId)+'/post-approval',{enabled:enabled}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không cập nhật được quyền đăng bài.');renderAdmin();say(enabled?'Đã cấp quyền đăng bài không cần duyệt.':'Đã thu hồi quyền đăng bài trực tiếp.');}).catch(function(error){console.error('[SONNA] Member post permission update failed:',error);permissionButton.disabled=false;say(error.message);});return;}
+    if(target.dataset.lockMember){if(!communityAdmin)return;var lockButton=target,memberId=target.dataset.lockMember,nextLocked=target.dataset.locked!=='true';request('POST','/api/admin/users/'+encodeURIComponent(memberId)+'/lock',{locked:nextLocked}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không cập nhật được tài khoản.');renderAdmin();if(activeView==='profile'){profileData=null;openProfile(activeProfile);}say(nextLocked?'Đã kick và khóa tài khoản; các phiên đăng nhập đã bị thu hồi.':'Đã mở khóa tài khoản.');}).catch(function(error){console.error('[SONNA] Lock member failed:',error);say(error.message);});return;}
+    if(target.dataset.category){selectedCategory=target.dataset.category;renderChips();renderPosts();return;}if(target.dataset.platform){selectedMarket=target.dataset.platform;renderMarketChips();renderListings();return;}
+    if(target.dataset.buy){openBuyModal(target.dataset.buy);return;}
+    if(target.dataset.action==='like'){if(!communityUser){ensureMember(function(){if(target.isConnected)target.click();});return;}var id=target.dataset.id;request('POST','/api/community/posts/'+encodeURIComponent(id)+'/likes',{}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không cập nhật được lượt thích.');return refreshPosts();}).catch(function(error){console.error('[SONNA] Like failed:',error);say(error.message);});return;}
+    if(target.dataset.action==='comments'){var box=$('comments-'+target.dataset.id);if(box)box.classList.toggle('hidden');return;}
+    if(target.dataset.action==='report'){if(!communityUser){ensureMember(function(){if(target.isConnected)target.click();});return;}openReportModal(target.dataset.id);return;}
+    if(target.dataset.orderAction){updateOrder(target.dataset.id,target.dataset.orderAction);return;}
+    if(target.dataset.close){hideModal();return;}
+    if(target.id==='reportDemo'){say('Hãy bấm “Báo cáo” trên một bài viết để xem trạng thái demo.');return;}
+  });
+  document.addEventListener('submit',function(event){var form=event.target;if(form.id!=='reportForm')return;event.preventDefault();if(!communityUser){ensureMember(function(){if(form.isConnected)form.requestSubmit();});return;}var reason=String(new FormData(form).get('reason')||'').trim(),postId=form.dataset.reportPost;if(!reason)return;request('POST','/api/community/posts/'+encodeURIComponent(postId)+'/reports',{reason:reason}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không gửi được báo cáo.');hideModal();say('Đã gửi báo cáo để quản trị viên xem xét.');}).catch(function(error){console.error('[SONNA] Report submit failed:',error);say(error.message);});});
+  document.addEventListener('submit',function(event){var form=event.target;if(form.matches('.comment-form')){event.preventDefault();if(!communityUser){ensureMember(function(){if(form.isConnected)form.requestSubmit();});return;}var text=String(new FormData(form).get('comment')||'').trim(),postId=form.dataset.comment;if(!text)return;request('POST','/api/community/posts/'+encodeURIComponent(postId)+'/comments',{text:text}).then(function(response){if(response._status!==200)throw new Error(response.error||'Không gửi được bình luận.');return refreshPosts();}).then(function(){var box=$('comments-'+postId);if(box)box.classList.remove('hidden');say('Đã đăng bình luận.');}).catch(function(error){console.error('[SONNA] Comment failed:',error);say(error.message);});return;}if(form.id==='chatForm'){event.preventDefault();if(!communityUser){ensureMember(function(){if(form.isConnected)form.requestSubmit();});return;}var text=String(new FormData(form).get('message')||'').trim();if(!text)return;var member=chatMembers.find(function(entry){return entry.id===activeChat;})||chatMembers[0],body={text:text};if(member.id!=='group')body.with=member.name;request('POST','/api/community/chat',body).then(function(response){if(response._status!==201)throw new Error(response.error||'Không gửi được tin nhắn.');form.reset();renderChat();}).catch(function(error){console.error('[SONNA] Chat send failed:',error);say(error.message);});}});
+  $('modalBackdrop').addEventListener('click',function(event){if(event.target===$('modalBackdrop'))hideModal();});$('authBackdrop').addEventListener('click',function(event){if(event.target===$('authBackdrop')){$('authBackdrop').classList.remove('show');pendingMemberAction=null;}});
+  $('postSearch').addEventListener('input',renderPosts);$('marketSearch').addEventListener('input',renderListings);
+  $('heroAction').onclick=openPostModal;
+  renderChips();renderMarketChips();renderListings();setView('forum');
+  syncSession().then(function(){return Promise.all([refreshPosts(),request('GET','/api/community/members').then(function(result){if(result._status===200){chatMembers=[{id:'group',name:'Phòng chung SONNA',initial:'💬',subtitle:'Trao đổi cùng cộng đồng'}].concat((result.members||[]).filter(function(member){return !communityUser||member.id!==communityUser.id;}).map(function(member){return{id:'dm-'+member.username,name:member.username,initial:member.username.slice(0,1).toUpperCase(),subtitle:member.postCount+' bài đăng'};}));renderChat();}}),refreshNotifications()]);}).catch(function(error){console.error('[SONNA] Session check failed:',error);updateIdentity();renderPosts();});
+  window.setInterval(function(){if(activeView==='chat'&&document.visibilityState==='visible')renderChat();},5000);
+  window.setInterval(function(){if(communityUser&&document.visibilityState==='visible')refreshNotifications();},30000);
+})();
+</script>
+</body>
+</html>

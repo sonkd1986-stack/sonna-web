@@ -1563,7 +1563,13 @@ async function handle(req, res) {
         const allowedCategories = ['Thảo luận chung', 'Hướng dẫn / Build đội hình', 'Sự kiện', 'Khoe acc', 'Tìm bang hội', 'Góp ý'];
         const images = Array.isArray(body.images) ? body.images : [];
         if (!allowedCategories.includes(category) || !title || title.length > 100 || !text || text.length > 1200) return send(res, 400, { error: 'Chuyên mục, tiêu đề hoặc nội dung không hợp lệ.' });
-        if (images.length > 8 || images.some(image => typeof image !== 'string' || !/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh).' });
+        // Admin được dùng ảnh tải lên (Supabase) hoặc link ảnh HTTPS trực tiếp; thành viên vẫn chỉ dùng ảnh tải lên.
+        const adminImageOk = image => {
+          if (typeof image !== 'string' || image.length > 600) return false;
+          if (/^\/uploads\/[a-f0-9]{20}\.(?:jpg|png|webp|gif)$/.test(image)) return true;
+          try { const u = new URL(image); return u.protocol === 'https:' && !u.username && !u.password; } catch (e) { return false; }
+        };
+        if (images.length > 8 || images.some(image => !adminImageOk(image))) return send(res, 400, { error: 'Ảnh đính kèm không hợp lệ (tối đa 8 ảnh, link phải bắt đầu bằng https://).' });
         const post = { id: communityDb.nextPostId++, userId: 0, isAdmin: true, category, title, body: text, images, likes: [], comments: [], status: 'approved', locked: false, pinned: false, createdAt: new Date().toISOString() };
         communityDb.posts.push(post);
         writeJSON(COMMUNITY_FILE, communityDb);
@@ -2059,8 +2065,8 @@ async function handle(req, res) {
       if (p === '/api/admin/upload' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
         const b = await readBody(req, MAX_BODY);
-        const url2 = await saveDataUrl(String(b.dataUrl || ''), 4 * 1024 * 1024);
-        if (!url2) return send(res, 400, { error: 'Ảnh không hợp lệ (chỉ nhận JPG/PNG/WEBP, tối đa 4MB).' });
+        const url2 = await saveDataUrl(String(b.dataUrl || ''), 8 * 1024 * 1024);
+        if (!url2) return send(res, 400, { error: 'Ảnh không hợp lệ (chỉ nhận JPG/PNG/WEBP/GIF, tối đa 8MB).' });
         return send(res, 200, { ok: true, url: url2 });
       }
       if (p === '/api/store' && req.method === 'GET') {
