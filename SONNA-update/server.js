@@ -1013,6 +1013,12 @@ function ctvAllowed(p, method) {
   return !p.startsWith('/api/admin') && !p.startsWith('/api/store');
 }
 const CTV_STATUSES = ['Đang bán', 'Đã ẩn', 'Chờ kiểm tra', 'Nháp'];
+// CTV chỉ được gửi chuỗi/số ngắn; object hoặc chuỗi quá dài bị bỏ để không làm hỏng dữ liệu giao cho khách.
+function ctvFieldValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.length <= 300) return value;
+  return undefined;
+}
 const CTV_FIELDS = ['tk', 'mk', 'title', 'info', 'price', 'cost', 'sub', 'note', 'level', 'chrono', 'chars', 'col', 'mkAt'];
 // Gộp thay đổi của CTV vào kho chung: chỉ sửa acc của chính CTV, không đụng acc khác, thư mục hay quy tắc.
 function mergeCtvAccounts(actor, value) {
@@ -1043,7 +1049,7 @@ function mergeCtvAccounts(actor, value) {
     if (cur) {
       if (['Đã bán', 'Đã đặt giữ', 'Đã tặng'].includes(cur.status)) return;
       const patch = {};
-      CTV_FIELDS.forEach(k => { if (a[k] !== undefined && a[k] !== cur[k]) patch[k] = a[k]; });
+      CTV_FIELDS.forEach(k => { const v = ctvFieldValue(a[k]); if (v !== undefined && v !== cur[k]) patch[k] = v; });
       if (a.status !== undefined && a.status !== cur.status) { if (CTV_STATUSES.includes(a.status)) patch.status = a.status; else skipped++; }
       if (typeof a.del === 'boolean' && a.del !== !!cur.del) patch.del = a.del;
       if (patch.tk && activeTk.has(String(patch.tk).toLowerCase())) delete patch.tk;
@@ -1055,7 +1061,7 @@ function mergeCtvAccounts(actor, value) {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(id) || Object.prototype[id] !== undefined || !a.tk || !a.mk || a.del) return;
     if (a.cat === 'promo' || !CTV_STATUSES.includes(a.status) || activeTk.has(String(a.tk).toLowerCase())) { skipped++; return; }
     const row = { id, cat: String(a.cat || ''), sub: String(a.sub || ''), status: a.status, sellerId: String(actor.id), ownerId: String(actor.id), listedAt: a.listedAt || new Date().toLocaleString('vi-VN') };
-    CTV_FIELDS.forEach(k => { if (a[k] !== undefined) row[k] = a[k]; });
+    CTV_FIELDS.forEach(k => { const v = ctvFieldValue(a[k]); if (v !== undefined) row[k] = v; });
     next.listed.push(row);
     activeTk.add(String(a.tk).toLowerCase());
     current.set(id, row);
@@ -1064,8 +1070,58 @@ function mergeCtvAccounts(actor, value) {
   });
   return { next, changed, skipped };
 }
-const fails = new Map(); // ip -> {n, until}
-function limited(ip) { const f = fails.get(ip); return f && f.n >= 5 && f.until > Date.now(); }
+// Trên Render/Cloudflare, req.socket.remoteAddress là IP của proxy nên mọi khách dùng chung một bộ đếm.
+// Cloudflare ghi đè cf-connecting-ip; nếu không có thì lấy IP đầu tiên trong x-forwarded-for.
+function clientIp(req) {
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  if (cf) return cf;
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.socket.remoteAddress || 'unknown';
+}
+// Trang admin ghi cả kho từ dữ liệu trình duyệt nên bản cũ có thể đè lên đơn vừa bán.
+// Giữ lại trạng thái acc đã bán/đặt giữ/tặng và acc/thư mục mới do máy chủ hoặc CTV vừa thêm.
+function preserveServerAccounts(value) {
+  const next = { ...value, listed: value.listed.slice(), ov: { ...(value.ov && typeof value.ov === 'object' ? value.ov : {}) } };
+  const incomingIds = new Set(next.listed.filter(a => a && a.id !== undefined).map(a => String(a.id)));
+  const deletedFolders = value.delSubs && typeof value.delSubs === 'object' ? value.delSubs : {};
+  (accountsDb.listed || []).forEach(base => {
+    if (!base || base.id === undefined || incomingIds.has(String(base.id))) return;
+    next.listed.push(base);
+    incomingIds.add(String(base.id));
+    const override = (accountsDb.ov || {})[base.id];
+    if (override && !next.ov[base.id]) next.ov[base.id] = override;
+  });
+  const incomingFolders = new Set((Array.isArray(value.added) ? value.added : []).filter(a => a && a.id !== undefined).map(a => String(a.id)));
+  const added = Array.isArray(value.added) ? value.added.slice() : [];
+  (accountsDb.added || []).forEach(folder => {
+    if (!folder || folder.id === undefined || incomingFolders.has(String(folder.id)) || deletedFolders[folder.id]) return;
+    added.push(folder);
+  });
+  next.added = added;
+  const LOCKED_FIELDS = ['status', 'orderId', 'soldAt', 'soldTo', 'giftedAt', 'giftedTo', 'reservedAt', 'sellerId', 'tk', 'mk'];
+  accountRecords().filter(a => a && ['Đã bán', 'Đã đặt giữ', 'Đã tặng'].includes(a.status)).forEach(current => {
+    const patch = { del: false };
+    LOCKED_FIELDS.forEach(key => { if (current[key] !== undefined) patch[key] = current[key]; });
+    next.ov[current.id] = { ...(next.ov[current.id] || {}), ...patch };
+  });
+  return next;
+}
+const fails = new Map(); // ip hoặc ip|tên đăng nhập -> {n, until}
+const FAIL_WINDOW_MS = 5 * 60000;
+function failEntry(key) { const f = fails.get(key); return f && f.until > Date.now() ? f : null; }
+const failKeyFor = (ip, username) => ip + '|' + String(username || '').toLowerCase();
+// Khóa theo cặp IP + tên đăng nhập (5 lần) và theo IP (20 lần) để một người không khóa được cả web.
+function limited(ip, username) {
+  const byIp = failEntry(ip), byAccount = username ? failEntry(failKeyFor(ip, username)) : null;
+  return !!((byIp && byIp.n >= 20) || (byAccount && byAccount.n >= 5));
+}
+function recordFail(ip, username) {
+  const keys = username ? [ip, failKeyFor(ip, username)] : [ip];
+  keys.forEach(key => { const f = failEntry(key) || { n: 0 }; f.n++; f.until = Date.now() + FAIL_WINDOW_MS; fails.set(key, f); });
+  if (fails.size > 5000) fails.forEach((value, key) => { if (value.until <= Date.now()) fails.delete(key); });
+}
+// Đăng nhập đúng chỉ xóa bộ đếm của chính tài khoản đó, không xóa bộ đếm theo IP.
+function clearFail(ip, username) { if (username) fails.delete(failKeyFor(ip, username)); }
 const registrationAttempts = new Map();
 function registrationLimited(ip) {
   const now = Date.now();
@@ -1081,27 +1137,46 @@ function registrationLimited(ip) {
 }
 
 // ---------- HTTP helpers ----------
+const SECURITY_HEADERS = Object.assign({
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'strict-origin-when-cross-origin'
+}, process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === '1'
+  ? { 'Strict-Transport-Security': 'max-age=15552000' } : {});
 function send(res, status, obj, headers) {
   return cloudState.flush().then(() => {
-    res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, headers));
+    res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, SECURITY_HEADERS, headers));
     res.end(JSON.stringify(obj));
   }).catch(error => {
     console.error('[SONNA] Supabase state persistence failed:', error);
     if (!res.headersSent) {
-      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.writeHead(503, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, SECURITY_HEADERS));
       res.end(JSON.stringify({ error: 'Không thể lưu dữ liệu lên Supabase. Yêu cầu chưa được xác nhận.' }));
     }
   });
 }
-function readRaw(req) {
+// Mặc định chỉ nhận 256KB để người chưa đăng nhập không đẩy được thân yêu cầu lớn; route tải ảnh/kho truyền giới hạn riêng.
+const DEFAULT_BODY_LIMIT = 256 * 1024;
+function readRaw(req, limit = DEFAULT_BODY_LIMIT) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > MAX_BODY) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size > limit) { reject(Object.assign(new Error('too large'), { tooLarge: true })); req.destroy(); } else chunks.push(c); });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }
-function readBody(req) { return readRaw(req).then(t => (t ? JSON.parse(t) : {})); }
+function readBody(req, limit) { return readRaw(req, limit).then(t => (t ? JSON.parse(t) : {})); }
+// Giới hạn số lần thao tác của một thành viên trong cộng đồng (đăng bài, bình luận, chat, tải ảnh).
+const actionHits = new Map();
+function rateHit(key, max, windowMs) {
+  const now = Date.now();
+  let entry = actionHits.get(key);
+  if (!entry || entry.until <= now) entry = { count: 0, until: now + windowMs };
+  entry.count++;
+  actionHits.set(key, entry);
+  if (actionHits.size > 5000) actionHits.forEach((value, k) => { if (value.until <= now) actionHits.delete(k); });
+  return entry.count > max;
+}
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
 // Mã phiên bản tài nguyên tĩnh: đổi mỗi lần máy chủ khởi động (mỗi lần deploy).
 const BUILD = Date.now().toString(36);
@@ -1113,7 +1188,21 @@ async function handle(req, res) {
   try { url = new URL(req.url, 'http://x'); }
   catch (e) { res.writeHead(400); return res.end('Bad request'); }
   const p = url.pathname;
-  const ip = req.socket.remoteAddress;
+  const ip = clientIp(req);
+
+  // Chặn gọi API thay đổi dữ liệu từ trang web khác (CSRF). Webhook của SePay/Gạch Thẻ không gửi Origin của trình duyệt.
+  if (p.startsWith('/api/') && req.method !== 'GET' && req.method !== 'HEAD' && !p.startsWith('/api/webhook/')) {
+    const origin = req.headers.origin;
+    if (origin) {
+      let originHost = '';
+      try { originHost = new URL(origin).host; } catch (e) {}
+      const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+      if (originHost !== req.headers.host && originHost !== forwardedHost) {
+        res.writeHead(403, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, SECURITY_HEADERS));
+        return res.end(JSON.stringify({ error: 'Nguồn yêu cầu không hợp lệ.' }));
+      }
+    }
+  }
 
   if (['/chargingws/v2', '/api/chargingws/v2', '/api/webhook/gachthe'].includes(p) && req.method === 'POST') {
     try {
@@ -1127,6 +1216,7 @@ async function handle(req, res) {
       return send(res, result.status, result.body);
     } catch (error) {
       if (error instanceof SyntaxError) return send(res, 400, { success: false });
+      if (error && error.tooLarge) return send(res, 413, { success: false });
       console.error('[SONNA] Gạch Thẻ callback failed:', error);
       return send(res, 500, { success: false });
     }
@@ -1142,18 +1232,18 @@ async function handle(req, res) {
         return send(res, 200, { authed: !!role, role, staff: staff ? { id: staff.id, username: staff.username, name: staff.name || staff.username } : null, nav: NAV, store: publicStore(), user: publicUser(cu), orders: cu ? userOrders(cu) : [], payment: publicPayment(), simTopup: simTopup(), cardTopupReady: gachTheReady(), realtime: realtime.publicClientConfig() });
       }
       if (p === '/api/login' && req.method === 'POST') {
-        if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
         const b = await readBody(req);
         const username = String(b.username || '').trim();
         const password = String(b.password || '');
+        if (limited(ip, username)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
         const ctvUser = usersDb.users.find(user => user.username.toLowerCase() === username.toLowerCase() && normalizeUserRole(user.role) === 'ctv');
         const adminOk = checkLogin(username, password);
         const ctvOk = !!ctvUser && crypto.timingSafeEqual(Buffer.from(hashPw(password, ctvUser.salt), 'hex'), Buffer.from(ctvUser.hash, 'hex'));
         if (!adminOk && !ctvOk) {
-          const f = fails.get(ip) || { n: 0 }; f.n++; f.until = Date.now() + 5 * 60000; fails.set(ip, f);
+          recordFail(ip, username);
           return send(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
         }
-        fails.delete(ip);
+        clearFail(ip, username);
         const t = crypto.randomBytes(24).toString('hex');
         const exp = Date.now() + SESSION_MS;
         sessions.set(t, exp);
@@ -1170,7 +1260,7 @@ async function handle(req, res) {
         return send(res, 200, { ok: true, user: userPayload }, { 'Set-Cookie': `sid=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}` });
       }
       if (p === '/api/logout' && req.method === 'POST') {
-        const t = getToken(req); if (t) sessions.delete(t);
+        const t = getToken(req); if (t) { sessions.delete(t); adminSessionUsers.delete(t); }
         saveSessions();
         const secure = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
         return send(res, 200, { ok: true }, { 'Set-Cookie': `sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}` });
@@ -1276,6 +1366,7 @@ async function handle(req, res) {
       if (p === '/api/community/posts' && req.method === 'POST') {
         const user = getUser(req);
         if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để đăng bài.' });
+        if (rateHit('post:' + user.id, 5, 10 * 60000)) return send(res, 429, { error: 'Bạn đăng bài quá nhanh, vui lòng thử lại sau vài phút.' });
         const body = await readBody(req);
         const category = String(body.category || '').trim();
         const title = String(body.title || '').trim();
@@ -1293,6 +1384,7 @@ async function handle(req, res) {
       if (communityActionMatch && req.method === 'POST') {
         const user = getUser(req);
         if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để tương tác.' });
+        if (rateHit('react:' + user.id, 30, 60000)) return send(res, 429, { error: 'Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.' });
         const post = communityDb.posts.find(entry => entry.id === Number(communityActionMatch[1]) && !entry.deletedAt);
         if (!post) return send(res, 404, { error: 'Không tìm thấy bài viết.' });
         if (post.status === 'pending' || post.status === 'rejected') return send(res, 404, { error: 'Bài viết chưa được duyệt.' });
@@ -1348,18 +1440,20 @@ async function handle(req, res) {
       const communityMemberMatch = /^\/api\/community\/members\/([A-Za-z0-9_.-]{3,30})$/.exec(p);
       if (communityMemberMatch && req.method === 'GET') {
         const username = decodeURIComponent(communityMemberMatch[1]);
-        const adminViewer = isAuthed(req);
+        const adminViewer = sessionRole(req) === 'admin';
         const user = usersDb.users.find(entry => entry.username.toLowerCase() === username.toLowerCase() && (!entry.locked || adminViewer));
         if (!user) return send(res, 404, { error: 'Không tìm thấy thành viên.' });
         const memberPosts = communityDb.posts.filter(post => post.userId === user.id && !post.deletedAt && post.status !== 'pending' && post.status !== 'rejected').slice().reverse().map(publicCommunityPost);
         const memberOrders = orders.filter(order => order.userId === user.id);
         const reputation = memberPosts.reduce((total, post) => total + (Number(post.likes) || 0), 0);
         const rank = memberPosts.length >= 50 ? 'Thành viên nòng cốt' : memberPosts.length >= 10 ? 'Thành viên tích cực' : 'Thành viên mới';
-        return send(res, 200, { profile: { id: user.id, username: user.username, createdAt: user.createdAt, postCount: memberPosts.length, reputation, rank, orderCount: memberOrders.length, locked: !!user.locked }, posts: memberPosts });
+        return send(res, 200, { profile: { id: user.id, username: user.username, createdAt: user.createdAt, postCount: memberPosts.length, reputation, rank, ...(adminViewer ? { orderCount: memberOrders.length, locked: !!user.locked } : {}) }, posts: memberPosts });
       }
       if (p === '/api/community/images' && req.method === 'POST') {
-        if (!getUser(req)) return send(res, 401, { error: 'Đăng nhập thành viên để tải ảnh.' });
-        const body = await readBody(req);
+        const uploader = getUser(req);
+        if (!uploader) return send(res, 401, { error: 'Đăng nhập thành viên để tải ảnh.' });
+        if (rateHit('img:' + uploader.id, 30, 10 * 60000)) return send(res, 429, { error: 'Bạn tải ảnh quá nhanh, vui lòng thử lại sau vài phút.' });
+        const body = await readBody(req, MAX_BODY);
         const imageUrl = await saveDataUrl(String(body.dataUrl || ''));
         if (!imageUrl) return send(res, 400, { error: 'Ảnh không hợp lệ hoặc vượt quá 8 MB (JPG, PNG, WebP, GIF).' });
         const imageName = path.basename(new URL(imageUrl).pathname);
@@ -1371,6 +1465,7 @@ async function handle(req, res) {
       if (p === '/api/community/chat' && (req.method === 'GET' || req.method === 'POST')) {
         const user = getUser(req);
         if (!user) return send(res, 401, { error: 'Đăng nhập thành viên để sử dụng chat.' });
+        if (req.method === 'POST' && rateHit('chat:' + user.id, 30, 60000)) return send(res, 429, { error: 'Bạn nhắn quá nhanh, vui lòng thử lại sau ít phút.' });
         let conversationId = 'group';
         let otherUser = null;
         const withName = String(url.searchParams.get('with') || '').trim();
@@ -1513,14 +1608,17 @@ async function handle(req, res) {
         return send(res, 200, { ok: true });
       }
       if ((p === '/api/user/register' || p === '/api/user/login') && req.method === 'POST') {
-        if (limited(ip)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
-        if (p.endsWith('/register') && registrationLimited(ip)) return send(res, 429, { error: 'Đăng ký quá nhiều lần, vui lòng thử lại sau 15 phút.' });
         const b = await readBody(req);
         const username = String(b.username || '').trim(), password = String(b.password || '');
+        if (limited(ip, username)) return send(res, 429, { error: 'Thử sai quá nhiều lần, vui lòng đợi vài phút.' });
+        if (p.endsWith('/register') && registrationLimited(ip)) return send(res, 429, { error: 'Đăng ký quá nhiều lần, vui lòng thử lại sau 15 phút.' });
         let u;
         if (p.endsWith('register')) {
           if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) return send(res, 400, { error: 'Tên đăng nhập 3-30 ký tự: chữ, số, _ . -' });
           if (password.length < 6 || password.length > 100) return send(res, 400, { error: 'Mật khẩu cần từ 6 ký tự.' });
+          // Không cho khách đăng ký trùng tên admin hoặc tên dễ nhầm với quản trị viên (hệ thống coi tên trùng admin là admin).
+          const reserved = new Set(['admin', 'administrator', 'sonna', 'sonnaadmin', 'sonna_admin', 'sonna-admin', 'quantri', 'quantrivien', String(admin && admin.username || '').toLowerCase()]);
+          if (reserved.has(username.toLowerCase())) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
           if (usersDb.users.some(x => x.username.toLowerCase() === username.toLowerCase())) return send(res, 409, { error: 'Tên đăng nhập đã được dùng.' });
           const salt = crypto.randomBytes(16).toString('hex');
           const nextUsers = JSON.parse(JSON.stringify(usersDb));
@@ -1530,13 +1628,16 @@ async function handle(req, res) {
           usersDb = nextUsers;
         } else {
           u = usersDb.users.find(x => x.username.toLowerCase() === username.toLowerCase());
-          if (u && u.locked) return send(res, 403, { error: 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.' });
-          const ok = u && crypto.timingSafeEqual(Buffer.from(hashPw(password, u.salt), 'hex'), Buffer.from(u.hash, 'hex'));
+          // Luôn băm mật khẩu (kể cả khi không có tài khoản) để thời gian phản hồi không lộ tài khoản nào tồn tại.
+          const candidate = hashPw(password, u ? u.salt : '0'.repeat(32));
+          const ok = !!u && crypto.timingSafeEqual(Buffer.from(candidate, 'hex'), Buffer.from(u.hash, 'hex'));
           if (!ok) {
-            const f = fails.get(ip) || { n: 0 }; f.n++; f.until = Date.now() + 5 * 60000; fails.set(ip, f);
+            recordFail(ip, username);
             return send(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
           }
-          fails.delete(ip);
+          // Chỉ báo "bị khóa" sau khi mật khẩu đúng.
+          if (u.locked) return send(res, 403, { error: 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.' });
+          clearFail(ip, username);
         }
         const t = crypto.randomBytes(24).toString('hex');
         cSessions.set(t, { id: u.id, exp: Date.now() + SESSION_MS * 3 });
@@ -1957,7 +2058,7 @@ async function handle(req, res) {
       }
       if (p === '/api/admin/upload' && req.method === 'POST') {
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
-        const b = await readBody(req);
+        const b = await readBody(req, MAX_BODY);
         const url2 = await saveDataUrl(String(b.dataUrl || ''), 4 * 1024 * 1024);
         if (!url2) return send(res, 400, { error: 'Ảnh không hợp lệ (chỉ nhận JPG/PNG/WEBP, tối đa 4MB).' });
         return send(res, 200, { ok: true, url: url2 });
@@ -1997,7 +2098,7 @@ async function handle(req, res) {
         const k = m[1];
         if (k === '__proto__' || k === 'constructor') return send(res, 400, { error: 'Khóa không hợp lệ.' });
         if (!isAuthed(req)) return send(res, 401, { error: 'Cần đăng nhập.' });
-        const b = await readBody(req);
+        const b = await readBody(req, MAX_BODY);
         if (!('value' in b)) return send(res, 400, { error: 'Thiếu value.' });
         if (k === 'acc') {
           if (!b.value || typeof b.value !== 'object' || Array.isArray(b.value) || !Array.isArray(b.value.listed)) return send(res, 400, { error: 'Dữ liệu kho tài khoản không hợp lệ.' });
@@ -2010,8 +2111,9 @@ async function handle(req, res) {
             }
             return send(res, 200, { ok: true, changed: result.changed, skipped: result.skipped });
           }
-          commitState({ [ACCOUNTS_FILE]: b.value });
-          accountsDb = b.value;
+          const protectedAccounts = preserveServerAccounts(b.value);
+          commitState({ [ACCOUNTS_FILE]: protectedAccounts });
+          accountsDb = protectedAccounts;
           return send(res, 200, { ok: true });
         }
         const nextStore = { ...store, [k]: b.value };
@@ -2022,6 +2124,7 @@ async function handle(req, res) {
       return send(res, 404, { error: 'Không tìm thấy.' });
     } catch (e) {
       if (e instanceof SyntaxError) return send(res, 400, { error: 'Dữ liệu yêu cầu không hợp lệ.' });
+      if (e && e.tooLarge) return send(res, 413, { error: 'Dữ liệu gửi lên quá lớn.' });
       console.error('[SONNA] API request failed:', e);
       return send(res, 500, { error: 'Máy chủ không thể xử lý yêu cầu.' });
     }
@@ -2054,11 +2157,11 @@ async function handle(req, res) {
       const html = buf.toString('utf8')
         .replace(/<head>/i, `<head><meta name="sonna-build" content="${BUILD}">`)
         .replace(/(\s(?:src|href)=")(\/?[\w./-]+\.(?:js|css|svg))"/g, (m, attr, ref) => `${attr}${ref}?v=${BUILD}"`);
-      res.writeHead(200, { 'Content-Type': MIME[ext], 'Cache-Control': 'no-cache' });
+      res.writeHead(200, Object.assign({ 'Content-Type': MIME[ext], 'Cache-Control': 'no-cache' }, SECURITY_HEADERS));
       return res.end(html);
     }
     const cache = url.searchParams.get('v') === BUILD ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache });
+    res.writeHead(200, Object.assign({ 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache }, SECURITY_HEADERS));
     res.end(buf);
   });
 }

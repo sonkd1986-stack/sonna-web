@@ -45,8 +45,8 @@ function readJSON(file, fallback) {
   }
 }
 
-function persistBatch(entries) {
-  const pending = writes.then(async () => {
+async function persistOnce(entries) {
+  {
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
@@ -75,6 +75,25 @@ function persistBatch(entries) {
     } finally {
       client.release();
     }
+  }
+}
+
+// Mỗi tài liệu được ghi nguyên khối nên thử lại an toàn. Lỗi chỉ được báo cho
+// yêu cầu đang chờ; các yêu cầu sau vẫn chạy bình thường và ghi đè lại bản mới nhất.
+function persistBatch(entries) {
+  const pending = writes.then(async () => {
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await persistOnce(entries);
+        return;
+      } catch (error) {
+        lastError = error;
+        console.error(`[SONNA] Supabase write failed (attempt ${attempt + 1}/3):`, error.message);
+        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+      }
+    }
+    throw lastError;
   });
 
   writes = pending.catch(error => {
@@ -104,7 +123,11 @@ function writeBatch(files) {
 
 async function flush() {
   await writes;
-  if (writeError) throw writeError;
+  if (writeError) {
+    const error = writeError;
+    writeError = null;
+    throw error;
+  }
 }
 
 function has(key) {
